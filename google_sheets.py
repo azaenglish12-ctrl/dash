@@ -15,33 +15,31 @@ SCOPES = [
 def init_google_sheets():
     """구글시트 연결 초기화"""
     try:
-        # 항상 credentials.json 파일을 먼저 시도
-        creds = Credentials.from_service_account_file(
-            'credentials.json',
-            scopes=SCOPES
-        )
-        client = gspread.authorize(creds)
-        return client
-            
-    except FileNotFoundError:
-        # 파일이 없을 때만 Secrets 확인
-        try:
-            if "gcp_service_account" in st.secrets:
-                creds = Credentials.from_service_account_info(
-                    st.secrets["gcp_service_account"],
+        # Streamlit Cloud에서 실행 중인지 확인
+        if "gcp_service_account" in st.secrets:
+            # Streamlit Cloud - Secrets 사용
+            creds = Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"],
+                scopes=SCOPES
+            )
+            client = gspread.authorize(creds)
+            return client
+        else:
+            # 로컬 - credentials.json 사용
+            try:
+                creds = Credentials.from_service_account_file(
+                    'credentials.json',
                     scopes=SCOPES
                 )
                 client = gspread.authorize(creds)
                 return client
-        except:
-            pass
-        
-        st.error("credentials.json 파일을 찾을 수 없습니다!")
-        return None
-        
+            except FileNotFoundError:
+                st.error("credentials.json 파일을 찾을 수 없습니다!")
+                return None
+                
     except Exception as e:
         st.error(f"구글시트 연결 실패: {e}")
-        st.error("구글시트 URL과 공유 설정을 확인하세요.")
+        st.info("Secrets 설정을 확인하세요.")
         return None
 
 @st.cache_data(ttl=10)  # 10초마다 캐시 갱신 
