@@ -465,20 +465,60 @@ def main():
             if len(available_dates) == 0:
                 st.error("날짜 데이터가 없습니다. 구글시트를 확인하세요.")
                 return
+                
+            # 날짜 문자열을 datetime 객체로 변환 (다양한 형식 지원)
+            from datetime import datetime
+            date_objects = []
+            date_mapping = {}  # datetime 객체와 원본 문자열 매핑
+            
+            for d in available_dates:
+                # 다양한 날짜 형식 시도
+                date_formats = [
+                    '%Y-%m-%d',      # 2025-10-10
+                    '%Y. %m. %d',    # 2025. 10. 10
+                    '%Y.%m.%d',      # 2025.10.10
+                    '%Y/%m/%d',      # 2025/10/10
+                    '%Y-%m-%d.',     # 2025-10-10.
+                    '%Y. %m. %d.',   # 2025. 10. 10.
+                ]
+                
+                for fmt in date_formats:
+                    try:
+                        date_obj = datetime.strptime(d.strip(), fmt).date()
+                        date_objects.append(date_obj)
+                        date_mapping[date_obj] = d  # 원본 문자열 저장
+                        break
+                    except:
+                        continue
+            
+            if not date_objects:
+                st.error(f"날짜 형식을 인식할 수 없습니다. 예시 날짜: {available_dates[0]}")
+                selected_date_str = available_dates[-1]  # 최신 날짜 사용
+            else:
+                # 캘린더 위젯
+                selected_date = st.date_input(
+                    "날짜 선택",
+                    value=date_objects[-1],  # 최신 날짜 기본값
+                    min_value=date_objects[0],  # 최소 날짜
+                    max_value=date_objects[-1],  # 최대 날짜
+                    format="YYYY-MM-DD"
+                )
+                
+                # 선택한 날짜를 원본 형식으로 변환
+                if selected_date in date_mapping:
+                    selected_date_str = date_mapping[selected_date]
+                else:
+                    # 매핑에 없으면 가장 가까운 날짜 찾기
+                    closest_date = min(date_objects, key=lambda x: abs(x - selected_date))
+                    selected_date_str = date_mapping[closest_date]
+                    st.warning(f"{selected_date}에는 데이터가 없습니다. {closest_date}의 데이터를 표시합니다.")
+                
         else:
             st.error("'날짜' 컬럼이 없습니다. 구글시트 헤더를 확인하세요.")
             return
-        
-        # 날짜 선택 박스
-        selected_date = st.selectbox(
-            "날짜 선택:",
-            options=available_dates,
-            index=len(available_dates)-1,  # 기본값: 최신 날짜
-            format_func=lambda x: x  # 날짜 포맷 (필요시 수정)
-        )
     
     # 대시보드 생성 (선택한 날짜 전달)
-    fig, summary = create_dashboard(selected_date)
+    fig, summary = create_dashboard(selected_date_str)  # selected_date_str로 변경
     
     # 데이터가 있는 경우에만 표시
     if fig is not None:
