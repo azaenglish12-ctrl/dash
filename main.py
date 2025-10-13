@@ -71,8 +71,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 구글시트 URL 설정 (여기에 실제 URL 입력!)
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1qW6Cs4FaSp-kEsSDFAyUw0hWzaTVBsSn9WeU8ZW_vd4/edit?gid=368136260#gid=368136260"  # 여기를 수정하세요!
-SHEET_NAME = "성적데이터"  # 시트 탭 이름
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"  # 여기를 수정하세요!
+SHEET_NAME = "시트1"  # 시트 탭 이름
 
 # 데이터 로드 함수
 @st.cache_data(ttl=10)  # 10초마다 새로고침
@@ -465,20 +465,35 @@ def main():
             if len(available_dates) == 0:
                 st.error("날짜 데이터가 없습니다. 구글시트를 확인하세요.")
                 return
+                
+            # 날짜 문자열을 datetime 객체로 변환
+            from datetime import datetime
+            date_objects = [datetime.strptime(d, '%Y-%m-%d').date() for d in available_dates]
+            
+            # 캘린더 위젯
+            selected_date = st.date_input(
+                "날짜 선택",
+                value=date_objects[-1],  # 최신 날짜 기본값
+                min_value=date_objects[0],  # 최소 날짜
+                max_value=date_objects[-1],  # 최대 날짜
+                format="YYYY-MM-DD"
+            )
+            
+            # 선택한 날짜를 문자열로 변환
+            selected_date_str = selected_date.strftime('%Y-%m-%d')
+            
+            # 해당 날짜에 데이터가 있는지 확인
+            if selected_date_str not in available_dates:
+                st.warning(f"{selected_date_str}에는 데이터가 없습니다. 가능한 날짜: {', '.join(available_dates[-5:])}")
+                # 가장 가까운 날짜로 자동 변경
+                selected_date_str = available_dates[-1]
+                
         else:
             st.error("'날짜' 컬럼이 없습니다. 구글시트 헤더를 확인하세요.")
             return
-        
-        # 날짜 선택 박스
-        selected_date = st.selectbox(
-            "날짜 선택:",
-            options=available_dates,
-            index=len(available_dates)-1,  # 기본값: 최신 날짜
-            format_func=lambda x: x  # 날짜 포맷 (필요시 수정)
-        )
     
     # 대시보드 생성 (선택한 날짜 전달)
-    fig, summary = create_dashboard(selected_date)
+    fig, summary = create_dashboard(selected_date_str)  # selected_date_str로 변경
     
     # 데이터가 있는 경우에만 표시
     if fig is not None:
