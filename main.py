@@ -337,7 +337,7 @@ def create_dashboard(selected_date):
         )
         
         # 영웅 체크
-        if row['어휘점수'] == 100 and row['스펠점수'] == 100:
+        if row['어휘점수'] == 100 and row['스펠점수'] >= 95:
             add_hero_effect(fig, row, x_base)
         else:
             add_normal_bars(fig, row, x_base)
@@ -536,3 +536,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
