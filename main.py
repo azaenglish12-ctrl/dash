@@ -659,7 +659,7 @@ def main():
         return
     
     # 타이틀
-    st.markdown("<h1 style='margin-bottom: 10px;'>📊 학원 통과 현황</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='margin-bottom: 10px;'>📊 아자영어 통과현황</h1>", unsafe_allow_html=True)
     
     # 월별 칭호 통계 - 좌우 2단으로 컴팩트하게
     col_hero, col_villain = st.columns(2)
