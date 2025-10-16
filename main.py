@@ -181,7 +181,7 @@ def is_villain(row):
     return fail_count >= 2
 
 # 월별 칭호 집계 함수
-def get_monthly_badges(df, selected_date):
+def get_monthly_badges(df, selected_date, excluded_students=[]):
     """해당 월의 영웅/빌런 칭호 집계"""
     # 선택한 날짜의 연월 추출
     try:
@@ -193,6 +193,10 @@ def get_monthly_badges(df, selected_date):
     # 해당 월 데이터 필터링
     df['날짜_obj'] = pd.to_datetime(df['날짜'], errors='coerce')
     monthly_df = df[df['날짜_obj'].dt.strftime('%Y-%m') == year_month].copy()
+    
+    # 제외할 학생 필터링
+    if excluded_students:
+        monthly_df = monthly_df[~monthly_df['이름'].isin(excluded_students)]
     
     # 영웅 집계
     monthly_df['is_hero'] = monthly_df.apply(is_hero, axis=1)
@@ -220,12 +224,15 @@ def mask_name(name):
         return name[0] + '□' * (len(name) - 2) + name[-1]
 
 # 학생 상태 분류 함수
-def classify_student(row):
+def classify_student(row, excluded_students=[]):
     """학생 상태 분류: hero, villain, normal, midterm, absent"""
     if row['출석'] == '결석':
         return 'absent'
     elif pd.isna(row['어휘점수']) and pd.isna(row['스펠점수']) and pd.isna(row['독해점수']):
         return 'midterm'
+    # 제외된 학생은 영웅/빌런 판정하지 않고 normal로 처리
+    elif row['이름'] in excluded_students:
+        return 'normal'
     elif is_hero(row):
         return 'hero'
     elif is_villain(row):
@@ -407,12 +414,16 @@ def add_midterm_section(fig, midterm_df, start_x):
             ))
 
 # 메인 대시보드 생성 함수
-def create_dashboard(selected_date):
+def create_dashboard(selected_date, excluded_students=[]):
     """전체 대시보드 생성"""
     df = load_data()
     
     # 선택한 날짜 데이터만 필터링
     today_df = df[df['날짜'] == selected_date].copy()
+    
+    # 제외할 학생 필터링
+    if excluded_students:
+        today_df = today_df[~today_df['이름'].isin(excluded_students)]
     
     if len(today_df) == 0:
         st.warning(f"{selected_date}에 해당하는 데이터가 없습니다.")
@@ -600,10 +611,14 @@ def create_dashboard(selected_date):
     # 지각 학생 수 계산
     late_count = len(today_df[today_df['출석'] == '지각'])
     
+    # 제외된 학생 수
+    excluded_count = len(excluded_students)
+    
     # 요약 정보
+    excluded_text = f" | <span style='color: gray'>제외: {excluded_count}명</span>" if excluded_count > 0 else ""
     summary_text = f"""
     <div style='text-align: center; padding: 10px; background: white; border-radius: 5px;'>
-    <b>영웅: {len(hero_df)}명 | 빌런: {len(villain_df)}명 | 정상응시: {len(normal_df)}명 | 내신: {len(midterm_df)}명 | 결석: {len(absent_df)}명 | 지각: {late_count}명 ⏰</b><br>
+    <b>영웅: {len(hero_df)}명 | 빌런: {len(villain_df)}명 | 정상응시: {len(normal_df)}명 | 내신: {len(midterm_df)}명 | 결석: {len(absent_df)}명 | 지각: {late_count}명 ⏰{excluded_text}</b><br>
     <span style='color: green'>통과: {pass_count}명</span> | 
     <span style='color: red'>재시험: {len(normal_df) - pass_count}명</span>
     </div>
@@ -616,7 +631,7 @@ def main():
     # 데이터 로드
     df = load_data()
     
-    # 날짜 선택
+    # 날짜 선택 및 학생 제외 기능
     if '날짜' in df.columns:
         df['날짜'] = df['날짜'].astype(str)
         df = df[df['날짜'] != 'nan']
@@ -642,7 +657,7 @@ def main():
                     continue
         
         if date_objects:
-            col1, col2 = st.columns([1, 3])
+            col1, col2 = st.columns([1, 2])
             with col1:
                 selected_date = st.date_input(
                     "날짜 선택",
@@ -652,8 +667,21 @@ def main():
                     format="YYYY-MM-DD"
                 )
             selected_date_str = date_mapping.get(selected_date, available_dates[-1])
+            
+            # 해당 날짜의 학생 목록 가져오기
+            today_students = df[df['날짜'] == selected_date_str]['이름'].unique().tolist()
+            today_students.sort()
+            
+            with col2:
+                excluded_students = st.multiselect(
+                    "제외할 학생 선택 (집계에서 제외됩니다)",
+                    options=today_students,
+                    default=[],
+                    help="선택한 학생은 영웅/빌런 집계 및 그래프에서 제외됩니다"
+                )
         else:
             selected_date_str = available_dates[-1]
+            excluded_students = []
     else:
         st.error("'날짜' 컬럼이 없습니다.")
         return
@@ -664,7 +692,7 @@ def main():
     # 월별 칭호 통계 - 좌우 2단으로 컴팩트하게
     col_hero, col_villain = st.columns(2)
     
-    hero_counts, villain_counts = get_monthly_badges(df, selected_date_str)
+    hero_counts, villain_counts = get_monthly_badges(df, selected_date_str, excluded_students)
     
     with col_hero:
         st.markdown("### 🦸‍♂️ 영웅 Top 5")
@@ -701,17 +729,27 @@ def main():
             st.info("아직 빌런이 없습니다.")
     
     # 그래프는 전체 너비 사용
-    fig, summary = create_dashboard(selected_date_str)
+    fig, summary = create_dashboard(selected_date_str, excluded_students)
     
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown(summary, unsafe_allow_html=True)
+        
+        # 제외된 학생 표시
+        if excluded_students:
+            st.info(f"🚫 제외된 학생: {', '.join(excluded_students)}")
     
     # 디버깅 정보 (접을 수 있는 섹션)
     with st.expander("🔍 영웅/빌런 판정 상세 정보 (디버깅)"):
         st.info("⏰ 표시는 지각한 학생입니다. 지각한 학생도 시험을 봤기 때문에 영웅/빌런 판정에 포함됩니다.")
         
         today_df = df[df['날짜'] == selected_date_str].copy()
+        
+        # 제외할 학생 필터링 (디버깅에도 반영)
+        if excluded_students:
+            st.warning(f"🚫 다음 학생들이 제외되었습니다: {', '.join(excluded_students)}")
+            today_df = today_df[~today_df['이름'].isin(excluded_students)]
+        
         today_df['is_hero'] = today_df.apply(is_hero, axis=1)
         today_df['is_villain'] = today_df.apply(is_villain, axis=1)
         
