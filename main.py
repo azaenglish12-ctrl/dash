@@ -245,36 +245,40 @@ def add_hero_effect(fig, row, x_base):
     """어휘+스펠 100점 영웅 효과 - 통과 느낌의 색상"""
     masked_name = mask_name(row['이름'])
     
+    # 실제 점수 가져오기
+    vocab_score = float(row['어휘점수'])
+    spell_score = float(row['스펠점수'])
+    
     # 골드-그린 그라디언트 막대 - 어휘
     fig.add_trace(go.Bar(
         x=[x_base],
-        y=[100],
+        y=[vocab_score],
         width=0.7,
         marker=dict(
             color='#00C851',  # 밝은 초록색
             line=dict(color='gold', width=4)
         ),
-        text='100',
+        text=str(int(vocab_score)),
         textposition='inside',
         textfont=dict(size=12, color='white', family='Arial Black'),
         showlegend=False,
-        hovertemplate=f"{masked_name} - 어휘: 100점<extra></extra>"
+        hovertemplate=f"{masked_name} - 어휘: {vocab_score}점<extra></extra>"
     ))
     
     # 골드-그린 그라디언트 막대 - 스펠
     fig.add_trace(go.Bar(
         x=[x_base + 0.8],
-        y=[100],
+        y=[spell_score],
         width=0.7,
         marker=dict(
             color='#FFD700',  # 골드
             line=dict(color='#00C851', width=4)
         ),
-        text='100',
+        text=str(int(spell_score)),
         textposition='inside',
         textfont=dict(size=12, color='white', family='Arial Black'),
         showlegend=False,
-        hovertemplate=f"{masked_name} - 스펠: 100점<extra></extra>"
+        hovertemplate=f"{masked_name} - 스펠: {spell_score}점<extra></extra>"
     ))
     
     # "영웅" 텍스트 - 골드 배경
