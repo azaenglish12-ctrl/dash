@@ -111,7 +111,7 @@ def load_data():
 
 # 영웅 판정 함수
 def is_hero(row):
-    """영웅 조건: 어휘 정확히 100점 + 스펠 95점 이상"""
+    """영웅 조건: 어휘 정확히 100점 + 스펠 95점 이상 + 독해 80점 이상"""
     # 결석한 학생만 제외 (출석, 지각 모두 포함)
     if row['출석'] == '결석':
         return False
@@ -130,7 +130,15 @@ def is_hero(row):
         is_vocab_100 = vocab_score >= 99.9 and vocab_score <= 100.1
         is_spell_95_plus = spell_score >= 94.9
         
-        return is_vocab_100 and is_spell_95_plus
+        # 독해 점수가 있는 경우, 80점 이상이어야 함
+        if pd.notna(row['독해점수']):
+            reading_score = float(str(row['독해점수']).strip())
+            is_reading_pass = reading_score >= 79.9  # 80점 이상
+            return is_vocab_100 and is_spell_95_plus and is_reading_pass
+        else:
+            # 독해 점수가 없으면 어휘+스펠만으로 판단
+            return is_vocab_100 and is_spell_95_plus
+            
     except (ValueError, TypeError):
         return False
 
