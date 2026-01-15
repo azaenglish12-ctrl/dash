@@ -7,7 +7,7 @@ import time
 
 # 페이지 설정 - TV 전체화면용
 st.set_page_config(
-    page_title="아자영어 통과현황",
+    page_title="(커트 : 뜻 94, 문맥 90, 독해 80)",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -699,7 +699,7 @@ def main():
         return
     
     # 타이틀
-    st.markdown("<h1 style='margin-bottom: 10px;'>📊 아자영어 통과현황</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='margin-bottom: 10px;'>📊 (커트 : 뜻 94, 문맥 90, 독해 80)</h1>", unsafe_allow_html=True)
     
     # 월별 칭호 통계 - 좌우 2단으로 컴팩트하게
     col_hero, col_villain = st.columns(2)
@@ -913,4 +913,5 @@ def is_villain(row):
     # 2개 이상 미통과면 빌런
     # (2과목만 있고 2과목 미통과도 빌런, 3과목 있고 2개 이상 미통과도 빌런)
     return fail_count >= 2
+
 
