@@ -172,10 +172,10 @@ def is_villain(row):
         if row['어휘점수'] < 94:
             fail_count += 1
     
-    # 스펠 체크 (기준: 80점)
+    # 스펠 체크 (기준: 90점)
     if pd.notna(row['스펠점수']):
         total_subjects += 1
-        if row['스펠점수'] < 80:
+        if row['스펠점수'] < 90:
             fail_count += 1
     
     # 독해 체크 (기준: 80점)
@@ -326,7 +326,7 @@ def add_villain_effect(fig, row, x_base):
     
     subjects = [
         ('어휘점수', 94, x_base),
-        ('스펠점수', 80, x_base + 0.8),
+        ('스펠점수', 90, x_base + 0.8),
         ('독해점수', 80, x_base + 1.6)
     ]
     
@@ -370,7 +370,7 @@ def add_normal_bars(fig, row, x_base):
     
     subjects = [
         ('어휘점수', 94, x_base),
-        ('스펠점수', 80, x_base + 0.8),
+        ('스펠점수', 90, x_base + 0.8),
         ('독해점수', 80, x_base + 1.6)
     ]
     
@@ -618,7 +618,7 @@ def create_dashboard(selected_date, excluded_students=[]):
         fig.add_vline(x=absent_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
     
     # 통과자 수 계산
-    pass_count = sum((normal_df['어휘점수'] >= 94) & (normal_df['스펠점수'] >= 80) & (normal_df['독해점수'] >= 80))
+    pass_count = sum((normal_df['어휘점수'] >= 94) & (normal_df['스펠점수'] >= 90) & (normal_df['독해점수'] >= 80))
     
     # 지각 학생 수 계산
     late_count = len(today_df[today_df['출석'] == '지각'])
@@ -844,9 +844,9 @@ def main():
                 
                 if pd.notna(row['스펠점수']):
                     total_subjects += 1
-                    if row['스펠점수'] < 80:
+                    if row['스펠점수'] < 90:
                         fail_count += 1
-                        fail_details.append(f"스펠 {row['스펠점수']}점 < 80점")
+                        fail_details.append(f"스펠 {row['스펠점수']}점 < 90점")
                 
                 if pd.notna(row['독해점수']):
                     total_subjects += 1
@@ -898,10 +898,10 @@ def is_villain(row):
         if row['어휘점수'] < 94:
             fail_count += 1
     
-    # 스펠 체크 (기준: 80점)
+    # 스펠 체크 (기준: 90점)
     if pd.notna(row['스펠점수']):
         total_subjects += 1
-        if row['스펠점수'] < 80:
+        if row['스펠점수'] < 90:
             fail_count += 1
     
     # 독해 체크 (기준: 80점)
@@ -913,3 +913,4 @@ def is_villain(row):
     # 2개 이상 미통과면 빌런
     # (2과목만 있고 2과목 미통과도 빌런, 3과목 있고 2개 이상 미통과도 빌런)
     return fail_count >= 2
+
