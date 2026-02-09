@@ -680,11 +680,19 @@ def main():
                     continue
         
         if date_objects:
+            # 오늘 날짜를 기본값으로 설정 (데이터 없으면 오늘 이전 가장 최근 날짜)
+            today = datetime.now().date()
+            if today in date_objects:
+                default_date = today
+            else:
+                past_dates = [d for d in date_objects if d <= today]
+                default_date = max(past_dates) if past_dates else date_objects[-1]
+            
             col1, col2 = st.columns([1, 2])
             with col1:
                 selected_date = st.date_input(
                     "날짜 선택",
-                    value=date_objects[-1],
+                    value=default_date,
                     min_value=date_objects[0],
                     max_value=date_objects[-1],
                     format="YYYY-MM-DD"
