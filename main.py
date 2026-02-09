@@ -57,7 +57,7 @@ except ImportError:
 # ============================================
 # ★★★ master26 시트 URL을 여기에 붙여넣으세요 ★★★
 # ============================================
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1DCpUkyWxD2qm_oH4ckr9OzvpKTvXqzZ7lPAHbt9QWmE/edit?gid=822370706#gid=822370706"
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1DCpUkyWxD2qm_oH4ckr9OzvpKTvXqzZ7lPAHbt9QWmE/edit"
 SHEET_NAME = "수업일지"
 
 # 학생 간격 설정 (4개 막대로 변경)
@@ -863,3 +863,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
