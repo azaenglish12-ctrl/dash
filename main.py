@@ -58,7 +58,7 @@ GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1DCpUkyWxD2qm_oH4ckr9
 SHEET_NAME = "수업일지"
 
 # 누적 영웅 시작 기준일 (11월 1일)
-CUMULATIVE_START_DATE = "2024-11-01"
+CUMULATIVE_START_DATE = "2025-01-01"
 
 # 학생 간격 설정 (4개 막대로 변경)
 STUDENT_WIDTH = 3.3
@@ -564,13 +564,9 @@ def create_dashboard(selected_date, excluded_students=[]):
     
     # 레이아웃
     fig.update_layout(
-        title={
-            'text': f"<b>통과 현황 - {selected_date}</b>",
-            'x': 0.5, 'xanchor': 'center',
-            'font': {'size': 24, 'color': 'black'}
-        },
+        title=None,
         height=900,
-        margin=dict(l=60, r=60, t=100, b=150),
+        margin=dict(l=60, r=60, t=30, b=150),
         xaxis=dict(ticktext=all_names, tickvals=tick_positions,
                    tickfont=dict(size=11), tickangle=0),
         yaxis=dict(range=[0, 115], title=dict(text="점수", font=dict(size=14)),
