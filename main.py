@@ -252,15 +252,23 @@ def render_hero_inline(hero_counts, label, top_n=5):
     ]
     
     items_html = ""
+    # ★ 동점자 처리: 같은 횟수면 같은 랭크, 다음 랭크는 건너뜀
+    rank_idx = 0  # 현재 스타일 인덱스
+    prev_count = None
     for idx, row_data in top.iterrows():
         masked = mask_name(row_data['이름'])
         count = int(row_data['영웅횟수'])
         pct = (count / max_count) * 100 if max_count > 0 else 0
-        s = rank_styles[min(idx, 4)]
         
-        # 1위는 테두리+글로우로 강조
-        border = f"2px solid #FFD700; box-shadow:{s['glow']}" if idx == 0 else "1px solid rgba(0,0,0,0.1)"
-        bar_h = "10px" if idx == 0 else "7px"
+        if prev_count is not None and count < prev_count:
+            rank_idx = idx  # 동점 아니면 현재 순번으로 점프 (1,1,3 방식)
+        prev_count = count
+        
+        s = rank_styles[min(rank_idx, 4)]
+        
+        # S랭크(rank_idx==0)는 테두리+글로우로 강조
+        border = f"2px solid #FFD700; box-shadow:{s['glow']}" if rank_idx == 0 else "1px solid rgba(0,0,0,0.1)"
+        bar_h = "10px" if rank_idx == 0 else "7px"
         
         items_html += f"""<div style='display:inline-flex;flex-direction:column;min-width:120px;max-width:180px;
             flex:1;background:#fff;border:{border};border-radius:6px;padding:4px 8px;'>
