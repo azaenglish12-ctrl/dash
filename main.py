@@ -26,8 +26,23 @@ st.markdown("""
     }
     /* TV모드: 상단 여백 극단 압축 */
     .block-container {
-        padding-top: 1rem !important;
+        padding-top: 0rem !important;
         padding-bottom: 0 !important;
+    }
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    #MainMenu {
+        display: none !important;
+    }
+    footer {
+        display: none !important;
+    }
+    div[data-testid="stDecoration"] {
+        display: none !important;
+    }
+    div[data-testid="stToolbar"] {
+        display: none !important;
     }
     div[data-testid="stMetricValue"] {
         font-size: 36px;
