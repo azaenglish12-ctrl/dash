@@ -564,9 +564,13 @@ def create_dashboard(selected_date, excluded_students=[]):
     
     # 레이아웃
     fig.update_layout(
-        title=None,
+        title={
+            'text': f"{selected_date}",
+            'x': 0.5, 'xanchor': 'center',
+            'font': {'size': 13, 'color': '#999'}
+        },
         height=900,
-        margin=dict(l=60, r=60, t=30, b=150),
+        margin=dict(l=60, r=60, t=35, b=150),
         xaxis=dict(ticktext=all_names, tickvals=tick_positions,
                    tickfont=dict(size=11), tickangle=0),
         yaxis=dict(range=[0, 115], title=dict(text="점수", font=dict(size=14)),
