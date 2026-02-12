@@ -73,7 +73,7 @@ GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1DCpUkyWxD2qm_oH4ckr9
 SHEET_NAME = "수업일지"
 
 # 누적 영웅 시작 기준일 (11월 1일)
-CUMULATIVE_START_DATE = "2025-01-01"
+CUMULATIVE_START_DATE = "2026-01-01"
 
 # 학생 간격 설정 (4개 막대로 변경)
 STUDENT_WIDTH = 3.3
