@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import time
+import streamlit.components.v1 as components
 
 # 페이지 설정 - TV 전체화면용
 st.set_page_config(
@@ -800,12 +801,16 @@ def main():
     with col_monthly:
         st.markdown(f"### {selected_month_str} 영웅 랭킹")
         monthly_html = render_hero_progress_bar(monthly_hero, f"{selected_month_str} 영웅", top_n=5)
-        st.markdown(monthly_html, unsafe_allow_html=True)
+        monthly_count = min(len(monthly_hero), 5)
+        monthly_height = 90 + max(monthly_count - 1, 0) * 58 if monthly_count > 0 else 50
+        components.html(f"<html><body style='margin:0;padding:0;font-family:sans-serif;'>{monthly_html}</body></html>", height=monthly_height, scrolling=False)
     
     with col_cumul:
         st.markdown(f"### 누적 영웅 랭킹 ({cumul_start_display}~)")
         cumul_html = render_hero_progress_bar(cumul_hero, "누적 영웅", top_n=5)
-        st.markdown(cumul_html, unsafe_allow_html=True)
+        cumul_count = min(len(cumul_hero), 5)
+        cumul_height = 90 + max(cumul_count - 1, 0) * 58 if cumul_count > 0 else 50
+        components.html(f"<html><body style='margin:0;padding:0;font-family:sans-serif;'>{cumul_html}</body></html>", height=cumul_height, scrolling=False)
     
     # 대시보드 그래프 (빌런 구간 그대로 유지)
     fig, summary = create_dashboard(selected_date_str, excluded_students)
