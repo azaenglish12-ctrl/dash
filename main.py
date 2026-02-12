@@ -637,24 +637,36 @@ def main():
                 past_dates = [d for d in date_objects if d <= today]
                 default_date = max(past_dates) if past_dates else date_objects[-1]
             
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                selected_date = st.date_input(
-                    "날짜 선택", value=default_date,
-                    min_value=date_objects[0], max_value=date_objects[-1],
-                    format="YYYY-MM-DD"
-                )
-            selected_date_str = date_mapping.get(selected_date, available_dates[-1])
+            # ★ 컨테이너로 시각적 순서 재배치
+            title_area = st.container()
+            hero_area = st.container()
+            graph_area = st.container()
+            controls_area = st.container()  # 날짜/제외 선택 → 그래프 아래로
+            summary_area = st.container()
+            legend_area = st.container()
+            debug_area = st.container()
+            refresh_area = st.container()
             
-            today_students = df[df['날짜'] == selected_date_str]['이름'].unique().tolist()
-            today_students.sort()
-            
-            with col2:
-                excluded_students = st.multiselect(
-                    "제외할 학생 선택 (집계에서 제외됩니다)",
-                    options=today_students, default=[],
-                    help="선택한 학생은 영웅/빌런 집계 및 그래프에서 제외됩니다"
-                )
+            # 1) 날짜/제외 위젯 (값 먼저 확보, 화면은 그래프 아래)
+            with controls_area:
+                ctrl1, ctrl2 = st.columns([1, 2])
+                with ctrl1:
+                    selected_date = st.date_input(
+                        "날짜 선택", value=default_date,
+                        min_value=date_objects[0], max_value=date_objects[-1],
+                        format="YYYY-MM-DD"
+                    )
+                selected_date_str = date_mapping.get(selected_date, available_dates[-1])
+                
+                today_students = df[df['날짜'] == selected_date_str]['이름'].unique().tolist()
+                today_students.sort()
+                
+                with ctrl2:
+                    excluded_students = st.multiselect(
+                        "제외할 학생 선택 (집계에서 제외됩니다)",
+                        options=today_students, default=[],
+                        help="선택한 학생은 영웅/빌런 집계 및 그래프에서 제외됩니다"
+                    )
         else:
             selected_date_str = available_dates[-1]
             excluded_students = []
@@ -662,7 +674,8 @@ def main():
         st.error("'날짜' 컬럼이 없습니다.")
         return
     
-    st.markdown(f"<h1 style='margin:0 0 5px 0;font-size:20px;'>{selected_date_str} | 아자영어 통과현황 (커트 : 뜻 94, 문맥 90, 독해 80, 문법 없음)</h1>", unsafe_allow_html=True)
+    with title_area:
+        st.markdown(f"<h1 style='margin:0 0 5px 0;font-size:20px;'>{selected_date_str} | 아자영어 통과현황 (커트 : 뜻 94, 문맥 90, 독해 80, 문법 없음)</h1>", unsafe_allow_html=True)
     
     # ★★★ 영웅 랭킹 - 가로 한 줄 압축 ★★★
     try:
@@ -688,109 +701,119 @@ def main():
         {cumul_html}
     </div>"""
     
-    components.html(f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{full_hero_html}</body></html>", height=110, scrolling=False)
+    with hero_area:
+        components.html(f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{full_hero_html}</body></html>", height=110, scrolling=False)
     
     # 대시보드 그래프 (빌런 구간 그대로 유지)
     fig, summary = create_dashboard(selected_date_str, excluded_students)
     
-    if fig is not None:
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.markdown(summary, unsafe_allow_html=True)
-        
-        if excluded_students:
-            st.info(f"제외된 학생: {', '.join(excluded_students)}")
+    with graph_area:
+        if fig is not None:
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     
-    st.markdown("""
-    <div style='text-align: center; padding: 10px; margin-top: 10px; background: #f0f0f0; border-radius: 5px;'>
-    <b>막대 색상:</b> 
-    <span style='color: #00C851;'>■ 통과</span> | 
-    <span style='color: #FF4444;'>■ 미통과</span> | 
-    <span style='color: #3498db;'>■ 문법 (커트없음)</span>
-    </div>
-    """, unsafe_allow_html=True)
+    # ★ 날짜/제외 컨트롤은 controls_area에 이미 배치됨 (그래프 아래)
     
-    with st.expander("영웅/빌런 판정 상세 정보 (디버깅)"):
-        st.info("지각한 학생도 시험을 봤기 때문에 영웅/빌런 판정에 포함됩니다. 문법점수는 커트가 없어 영웅/빌런 판정에 영향을 주지 않습니다.")
-        
-        today_df = df[df['날짜'] == selected_date_str].copy()
-        
-        if excluded_students:
-            st.warning(f"다음 학생들이 제외되었습니다: {', '.join(excluded_students)}")
-            today_df = today_df[~today_df['이름'].isin(excluded_students)]
-        
-        today_df['is_hero'] = today_df.apply(is_hero, axis=1)
-        today_df['is_villain'] = today_df.apply(is_villain, axis=1)
-        
-        st.markdown("### 전체 학생 영웅 판정 현황")
-        all_students = today_df[(today_df['출석'] != '결석') & 
-                                (pd.notna(today_df['어휘점수'])) & 
-                                (pd.notna(today_df['스펠점수']))].copy()
-        
-        if len(all_students) > 0:
-            for _, row in all_students.iterrows():
-                try:
+    # summary는 컨트롤 아래
+    with summary_area:
+        if fig is not None:
+            st.markdown(summary, unsafe_allow_html=True)
+            if excluded_students:
+                st.info(f"제외된 학생: {', '.join(excluded_students)}")
+    
+    with legend_area:
+        st.markdown("""
+        <div style='text-align: center; padding: 10px; margin-top: 10px; background: #f0f0f0; border-radius: 5px;'>
+        <b>막대 색상:</b> 
+        <span style='color: #00C851;'>■ 통과</span> | 
+        <span style='color: #FF4444;'>■ 미통과</span> | 
+        <span style='color: #3498db;'>■ 문법 (커트없음)</span>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with debug_area:
+        with st.expander("영웅/빌런 판정 상세 정보 (디버깅)"):
+            st.info("지각한 학생도 시험을 봤기 때문에 영웅/빌런 판정에 포함됩니다. 문법점수는 커트가 없어 영웅/빌런 판정에 영향을 주지 않습니다.")
+            
+            today_df = df[df['날짜'] == selected_date_str].copy()
+            
+            if excluded_students:
+                st.warning(f"다음 학생들이 제외되었습니다: {', '.join(excluded_students)}")
+                today_df = today_df[~today_df['이름'].isin(excluded_students)]
+            
+            today_df['is_hero'] = today_df.apply(is_hero, axis=1)
+            today_df['is_villain'] = today_df.apply(is_villain, axis=1)
+            
+            st.markdown("### 전체 학생 영웅 판정 현황")
+            all_students = today_df[(today_df['출석'] != '결석') & 
+                                    (pd.notna(today_df['어휘점수'])) & 
+                                    (pd.notna(today_df['스펠점수']))].copy()
+            
+            if len(all_students) > 0:
+                for _, row in all_students.iterrows():
+                    try:
+                        vocab_val = float(str(row['어휘점수']).strip())
+                        spell_val = float(str(row['스펠점수']).strip())
+                        is_hero_status = "영웅" if row['is_hero'] else "일반"
+                        attendance_mark = " (지각)" if row['출석'] == '지각' else ""
+                        vocab_ok = "O" if (vocab_val >= 99.9 and vocab_val <= 100.1) else "X"
+                        spell_ok = "O" if spell_val >= 94.9 else "X"
+                        grammar_text = ""
+                        if pd.notna(row.get('문법점수')):
+                            grammar_text = f", 문법 {row['문법점수']}점"
+                        st.markdown(f"**{row['이름']}**{attendance_mark} [{is_hero_status}]: {vocab_ok} 어휘 {vocab_val}점, {spell_ok} 스펠 {spell_val}점{grammar_text}")
+                    except:
+                        st.markdown(f"**{row['이름']}**: 데이터 변환 오류")
+            
+            st.markdown("---")
+            
+            st.markdown("### 영웅으로 판정된 학생들")
+            heroes = today_df[today_df['is_hero'] == True]
+            if len(heroes) > 0:
+                for _, row in heroes.iterrows():
                     vocab_val = float(str(row['어휘점수']).strip())
                     spell_val = float(str(row['스펠점수']).strip())
-                    is_hero_status = "영웅" if row['is_hero'] else "일반"
                     attendance_mark = " (지각)" if row['출석'] == '지각' else ""
-                    vocab_ok = "O" if (vocab_val >= 99.9 and vocab_val <= 100.1) else "X"
-                    spell_ok = "O" if spell_val >= 94.9 else "X"
-                    grammar_text = ""
-                    if pd.notna(row.get('문법점수')):
-                        grammar_text = f", 문법 {row['문법점수']}점"
-                    st.markdown(f"**{row['이름']}**{attendance_mark} [{is_hero_status}]: {vocab_ok} 어휘 {vocab_val}점, {spell_ok} 스펠 {spell_val}점{grammar_text}")
-                except:
-                    st.markdown(f"**{row['이름']}**: 데이터 변환 오류")
-        
-        st.markdown("---")
-        
-        st.markdown("### 영웅으로 판정된 학생들")
-        heroes = today_df[today_df['is_hero'] == True]
-        if len(heroes) > 0:
-            for _, row in heroes.iterrows():
-                vocab_val = float(str(row['어휘점수']).strip())
-                spell_val = float(str(row['스펠점수']).strip())
-                attendance_mark = " (지각)" if row['출석'] == '지각' else ""
-                st.markdown(f"**{row['이름']}**{attendance_mark}: O 어휘 {vocab_val}점, O 스펠 {spell_val}점")
-        else:
-            st.info("영웅 판정된 학생이 없습니다.")
-        
-        st.markdown("### 빌런으로 판정된 학생들")
-        villains = today_df[today_df['is_villain'] == True]
-        if len(villains) > 0:
-            for _, row in villains.iterrows():
-                reasons = []
-                attendance_mark = " (지각)" if row['출석'] == '지각' else ""
-                if pd.notna(row['어휘점수']) and row['어휘점수'] < 80:
-                    reasons.append(f"어휘 {row['어휘점수']}점 (80점 미만 - 즉시 빌런)")
-                if pd.notna(row['스펠점수']) and row['스펠점수'] < 60:
-                    reasons.append(f"스펠 {row['스펠점수']}점 (60점 미만 - 즉시 빌런)")
-                total_subjects = 0
-                fail_count = 0
-                fail_details = []
-                if pd.notna(row['어휘점수']):
-                    total_subjects += 1
-                    if row['어휘점수'] < 94:
-                        fail_count += 1
-                        fail_details.append(f"어휘 {row['어휘점수']}점 < 94점")
-                if pd.notna(row['스펠점수']):
-                    total_subjects += 1
-                    if row['스펠점수'] < 90:
-                        fail_count += 1
-                        fail_details.append(f"스펠 {row['스펠점수']}점 < 90점")
-                if pd.notna(row['독해점수']):
-                    total_subjects += 1
-                    if row['독해점수'] < 80:
-                        fail_count += 1
-                        fail_details.append(f"독해 {row['독해점수']}점 < 80점")
-                if fail_count >= 2:
-                    reasons.append(f"{total_subjects}과목 중 {fail_count}과목 미통과 ({', '.join(fail_details)})")
-                st.markdown(f"**{row['이름']}**{attendance_mark}: {' | '.join(reasons)}")
-        else:
-            st.info("빌런 판정된 학생이 없습니다.")
+                    st.markdown(f"**{row['이름']}**{attendance_mark}: O 어휘 {vocab_val}점, O 스펠 {spell_val}점")
+            else:
+                st.info("영웅 판정된 학생이 없습니다.")
+            
+            st.markdown("### 빌런으로 판정된 학생들")
+            villains = today_df[today_df['is_villain'] == True]
+            if len(villains) > 0:
+                for _, row in villains.iterrows():
+                    reasons = []
+                    attendance_mark = " (지각)" if row['출석'] == '지각' else ""
+                    if pd.notna(row['어휘점수']) and row['어휘점수'] < 80:
+                        reasons.append(f"어휘 {row['어휘점수']}점 (80점 미만 - 즉시 빌런)")
+                    if pd.notna(row['스펠점수']) and row['스펠점수'] < 60:
+                        reasons.append(f"스펠 {row['스펠점수']}점 (60점 미만 - 즉시 빌런)")
+                    total_subjects = 0
+                    fail_count = 0
+                    fail_details = []
+                    if pd.notna(row['어휘점수']):
+                        total_subjects += 1
+                        if row['어휘점수'] < 94:
+                            fail_count += 1
+                            fail_details.append(f"어휘 {row['어휘점수']}점 < 94점")
+                    if pd.notna(row['스펠점수']):
+                        total_subjects += 1
+                        if row['스펠점수'] < 90:
+                            fail_count += 1
+                            fail_details.append(f"스펠 {row['스펠점수']}점 < 90점")
+                    if pd.notna(row['독해점수']):
+                        total_subjects += 1
+                        if row['독해점수'] < 80:
+                            fail_count += 1
+                            fail_details.append(f"독해 {row['독해점수']}점 < 80점")
+                    if fail_count >= 2:
+                        reasons.append(f"{total_subjects}과목 중 {fail_count}과목 미통과 ({', '.join(fail_details)})")
+                    st.markdown(f"**{row['이름']}**{attendance_mark}: {' | '.join(reasons)}")
+            else:
+                st.info("빌런 판정된 학생이 없습니다.")
     
     # ★ 자동 새로고침 기본값 True
-    auto_refresh = st.checkbox("자동 새로고침 (10초)", value=True)
+    with refresh_area:
+        auto_refresh = st.checkbox("자동 새로고침 (10초)", value=True)
     if auto_refresh:
         time.sleep(10)
         st.rerun()
