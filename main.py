@@ -24,6 +24,11 @@ st.markdown("""
         padding: 0;
         max-width: 100%;
     }
+    /* TV모드: 상단 여백 극단 압축 */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 0 !important;
+    }
     div[data-testid="stMetricValue"] {
         font-size: 36px;
     }
@@ -208,178 +213,60 @@ def get_cumulative_hero_counts(df, selected_date, excluded_students=[]):
     
     return hero_counts
 
-# ★★★ 프로그레스바 HTML 생성 함수 ★★★
-def render_hero_progress_bar(hero_counts, title, top_n=5):
-    """영웅 Top N을 프로그레스바 형태로 렌더링"""
+# ★★★ 가로 한 줄 영웅 랭킹 HTML 생성 함수 ★★★
+def render_hero_inline(hero_counts, label, top_n=5):
+    """영웅 Top N을 가로 한 줄 프로그레스바로 렌더링"""
     if len(hero_counts) == 0:
-        return "<div style='padding:10px;color:#888;'>아직 영웅이 없습니다.</div>"
+        return f"<span style='color:#888;font-size:12px;'>{label} | 아직 영웅이 없습니다.</span>"
     
     top = hero_counts.head(top_n).reset_index(drop=True)
     max_count = top['영웅횟수'].max()
     
-    # 순위별 색상 (1위는 금색 그라데이션으로 확실히 차별)
-    rank_colors = {
-        0: {  # 1위 - 금색+빨강 (왕관)
-            'bar': 'linear-gradient(90deg, #FFD700 0%, #FF6B00 100%)',
-            'bg': 'rgba(255, 215, 0, 0.15)',
-            'border': '#FFD700',
-            'text': '#FF6B00',
-            'badge_bg': 'linear-gradient(135deg, #FFD700, #FF6B00)',
-            'badge_text': '#fff',
-            'rank_icon': 'S',
-            'shadow': '0 0 15px rgba(255, 215, 0, 0.5)',
-            'name_size': '18px',
-            'count_size': '20px',
-            'bar_height': '28px',
-        },
-        1: {  # 2위 - 은색
-            'bar': 'linear-gradient(90deg, #C0C0C0 0%, #8E8E8E 100%)',
-            'bg': 'rgba(192, 192, 192, 0.1)',
-            'border': '#C0C0C0',
-            'text': '#666',
-            'badge_bg': 'linear-gradient(135deg, #C0C0C0, #8E8E8E)',
-            'badge_text': '#fff',
-            'rank_icon': 'A',
-            'shadow': 'none',
-            'name_size': '15px',
-            'count_size': '17px',
-            'bar_height': '22px',
-        },
-        2: {  # 3위 - 동색
-            'bar': 'linear-gradient(90deg, #CD7F32 0%, #A0522D 100%)',
-            'bg': 'rgba(205, 127, 50, 0.08)',
-            'border': '#CD7F32',
-            'text': '#8B4513',
-            'badge_bg': 'linear-gradient(135deg, #CD7F32, #A0522D)',
-            'badge_text': '#fff',
-            'rank_icon': 'B',
-            'shadow': 'none',
-            'name_size': '14px',
-            'count_size': '15px',
-            'bar_height': '20px',
-        },
-        3: {  # 4위 - 진녹색
-            'bar': 'linear-gradient(90deg, #2E8B57 0%, #1B5E37 100%)',
-            'bg': 'rgba(46, 139, 87, 0.06)',
-            'border': '#2E8B57',
-            'text': '#2E8B57',
-            'badge_bg': '#2E8B57',
-            'badge_text': '#fff',
-            'rank_icon': 'C',
-            'shadow': 'none',
-            'name_size': '13px',
-            'count_size': '14px',
-            'bar_height': '18px',
-        },
-        4: {  # 5위 - 회색
-            'bar': 'linear-gradient(90deg, #708090 0%, #4A5568 100%)',
-            'bg': 'rgba(112, 128, 144, 0.06)',
-            'border': '#708090',
-            'text': '#708090',
-            'badge_bg': '#708090',
-            'badge_text': '#fff',
-            'rank_icon': 'D',
-            'shadow': 'none',
-            'name_size': '13px',
-            'count_size': '14px',
-            'bar_height': '18px',
-        },
-    }
+    # 순위별 스타일
+    rank_styles = [
+        {'icon': 'S', 'bar': 'linear-gradient(90deg,#FFD700,#FF6B00)', 'badge': 'linear-gradient(135deg,#FFD700,#FF6B00)',
+         'text': '#FF6B00', 'glow': '0 0 6px rgba(255,215,0,0.6)', 'name_wt': '900', 'name_sz': '14px', 'count_sz': '14px'},
+        {'icon': 'A', 'bar': 'linear-gradient(90deg,#C0C0C0,#8E8E8E)', 'badge': 'linear-gradient(135deg,#C0C0C0,#8E8E8E)',
+         'text': '#666', 'glow': 'none', 'name_wt': '700', 'name_sz': '12px', 'count_sz': '12px'},
+        {'icon': 'B', 'bar': 'linear-gradient(90deg,#CD7F32,#A0522D)', 'badge': 'linear-gradient(135deg,#CD7F32,#A0522D)',
+         'text': '#8B4513', 'glow': 'none', 'name_wt': '700', 'name_sz': '12px', 'count_sz': '12px'},
+        {'icon': 'C', 'bar': 'linear-gradient(90deg,#2E8B57,#1B5E37)', 'badge': '#2E8B57',
+         'text': '#2E8B57', 'glow': 'none', 'name_wt': '600', 'name_sz': '11px', 'count_sz': '11px'},
+        {'icon': 'D', 'bar': 'linear-gradient(90deg,#708090,#4A5568)', 'badge': '#708090',
+         'text': '#708090', 'glow': 'none', 'name_wt': '600', 'name_sz': '11px', 'count_sz': '11px'},
+    ]
     
-    html = f"<div style='padding: 5px 0;'>"
-    
+    items_html = ""
     for idx, row_data in top.iterrows():
         masked = mask_name(row_data['이름'])
         count = int(row_data['영웅횟수'])
         pct = (count / max_count) * 100 if max_count > 0 else 0
+        s = rank_styles[min(idx, 4)]
         
-        style = rank_colors.get(idx, rank_colors[4])
-        rank_num = idx + 1
+        # 1위는 테두리+글로우로 강조
+        border = f"2px solid #FFD700; box-shadow:{s['glow']}" if idx == 0 else "1px solid rgba(0,0,0,0.1)"
+        bar_h = "10px" if idx == 0 else "7px"
         
-        # 1위 특별 처리
-        if idx == 0:
-            html += f"""
-            <div style='
-                background: {style["bg"]};
-                border: 2px solid {style["border"]};
-                border-radius: 12px;
-                padding: 10px 14px;
-                margin-bottom: 8px;
-                box-shadow: {style["shadow"]};
-            '>
-                <div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;'>
-                    <div style='display:flex; align-items:center; gap:8px;'>
-                        <span style='
-                            background: {style["badge_bg"]};
-                            color: {style["badge_text"]};
-                            font-weight: 900;
-                            font-size: 16px;
-                            padding: 3px 10px;
-                            border-radius: 6px;
-                            letter-spacing: 1px;
-                        '>{style["rank_icon"]}</span>
-                        <span style='font-size:{style["name_size"]}; font-weight:900; color:#222;'>{masked}</span>
-                    </div>
-                    <span style='font-size:{style["count_size"]}; font-weight:900; color:{style["text"]};'>{count}회</span>
-                </div>
-                <div style='
-                    background: rgba(0,0,0,0.08);
-                    border-radius: 14px;
-                    height: {style["bar_height"]};
-                    overflow: hidden;
-                '>
-                    <div style='
-                        background: {style["bar"]};
-                        width: {pct}%;
-                        height: 100%;
-                        border-radius: 14px;
-                        transition: width 0.5s ease;
-                        box-shadow: 0 0 8px rgba(255,215,0,0.4);
-                    '></div>
-                </div>
+        items_html += f"""<div style='display:inline-flex;flex-direction:column;min-width:120px;max-width:180px;
+            flex:1;background:#fff;border:{border};border-radius:6px;padding:4px 8px;'>
+            <div style='display:flex;align-items:center;gap:4px;margin-bottom:2px;'>
+                <span style='background:{s["badge"]};color:#fff;font-weight:800;font-size:10px;
+                    padding:1px 5px;border-radius:3px;line-height:1.2;'>{s["icon"]}</span>
+                <span style='font-size:{s["name_sz"]};font-weight:{s["name_wt"]};color:#222;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{masked}</span>
+                <span style='font-size:{s["count_sz"]};font-weight:800;color:{s["text"]};
+                    margin-left:auto;white-space:nowrap;'>{count}회</span>
             </div>
-            """
-        else:
-            html += f"""
-            <div style='
-                background: {style["bg"]};
-                border: 1px solid {style["border"]};
-                border-radius: 8px;
-                padding: 7px 12px;
-                margin-bottom: 5px;
-            '>
-                <div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;'>
-                    <div style='display:flex; align-items:center; gap:6px;'>
-                        <span style='
-                            background: {style["badge_bg"]};
-                            color: {style["badge_text"]};
-                            font-weight: 800;
-                            font-size: 12px;
-                            padding: 2px 7px;
-                            border-radius: 4px;
-                        '>{style["rank_icon"]}</span>
-                        <span style='font-size:{style["name_size"]}; font-weight:700; color:#333;'>{masked}</span>
-                    </div>
-                    <span style='font-size:{style["count_size"]}; font-weight:800; color:{style["text"]};'>{count}회</span>
-                </div>
-                <div style='
-                    background: rgba(0,0,0,0.06);
-                    border-radius: 10px;
-                    height: {style["bar_height"]};
-                    overflow: hidden;
-                '>
-                    <div style='
-                        background: {style["bar"]};
-                        width: {pct}%;
-                        height: 100%;
-                        border-radius: 10px;
-                        transition: width 0.5s ease;
-                    '></div>
-                </div>
+            <div style='background:rgba(0,0,0,0.06);border-radius:5px;height:{bar_h};overflow:hidden;'>
+                <div style='background:{s["bar"]};width:{pct}%;height:100%;border-radius:5px;'></div>
             </div>
-            """
+        </div>"""
     
-    html += "</div>"
+    html = f"""<div style='display:flex;align-items:center;gap:6px;flex-wrap:nowrap;'>
+        <span style='font-weight:800;font-size:12px;color:#333;white-space:nowrap;min-width:fit-content;'>{label}</span>
+        <span style='color:#ccc;'>|</span>
+        {items_html}
+    </div>"""
     return html
 
 # 이름 마스킹 함수
@@ -779,38 +666,33 @@ def main():
         st.error("'날짜' 컬럼이 없습니다.")
         return
     
-    st.markdown("<h1 style='margin-bottom: 10px;'>아자영어 통과현황 (커트 : 뜻 94, 문맥 90, 독해 80, 문법 없음)</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='margin:0 0 5px 0;font-size:20px;'>아자영어 통과현황 (커트 : 뜻 94, 문맥 90, 독해 80, 문법 없음)</h1>", unsafe_allow_html=True)
     
-    # ★★★ 영웅 카드 섹션 (빌런 카드 제거, 영웅 2개 표시) ★★★
+    # ★★★ 영웅 랭킹 - 가로 한 줄 압축 ★★★
     try:
         selected_month_str = pd.to_datetime(selected_date_str).strftime('%m월')
     except:
         selected_month_str = "이번달"
     
-    # 누적 시작 표시용
     try:
         cumul_start_display = pd.to_datetime(CUMULATIVE_START_DATE).strftime('%Y.%m')
     except:
         cumul_start_display = "2024.11"
     
-    col_monthly, col_cumul = st.columns(2)
-    
     monthly_hero = get_monthly_hero_counts(df, selected_date_str, excluded_students)
     cumul_hero = get_cumulative_hero_counts(df, selected_date_str, excluded_students)
     
-    with col_monthly:
-        st.markdown(f"### {selected_month_str} 영웅 랭킹")
-        monthly_html = render_hero_progress_bar(monthly_hero, f"{selected_month_str} 영웅", top_n=5)
-        monthly_count = min(len(monthly_hero), 5)
-        monthly_height = 90 + max(monthly_count - 1, 0) * 58 if monthly_count > 0 else 50
-        components.html(f"<html><body style='margin:0;padding:0;font-family:sans-serif;'>{monthly_html}</body></html>", height=monthly_height, scrolling=False)
+    monthly_html = render_hero_inline(monthly_hero, f"{selected_month_str} 영웅", top_n=5)
+    cumul_html = render_hero_inline(cumul_hero, f"누적({cumul_start_display}~)", top_n=5)
     
-    with col_cumul:
-        st.markdown(f"### 누적 영웅 랭킹 ({cumul_start_display}~)")
-        cumul_html = render_hero_progress_bar(cumul_hero, "누적 영웅", top_n=5)
-        cumul_count = min(len(cumul_hero), 5)
-        cumul_height = 90 + max(cumul_count - 1, 0) * 58 if cumul_count > 0 else 50
-        components.html(f"<html><body style='margin:0;padding:0;font-family:sans-serif;'>{cumul_html}</body></html>", height=cumul_height, scrolling=False)
+    full_hero_html = f"""<div style='display:flex;flex-direction:column;gap:4px;padding:6px 10px;
+        background:#fff;border-radius:8px;border:1px solid #e0e0e0;margin-bottom:5px;'>
+        {monthly_html}
+        <div style='border-top:1px solid #eee;margin:2px 0;'></div>
+        {cumul_html}
+    </div>"""
+    
+    components.html(f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{full_hero_html}</body></html>", height=110, scrolling=False)
     
     # 대시보드 그래프 (빌런 구간 그대로 유지)
     fig, summary = create_dashboard(selected_date_str, excluded_students)
