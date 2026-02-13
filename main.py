@@ -559,99 +559,75 @@ def create_dashboard(selected_date, excluded_students=[]):
 # ★★★ 개인 리포트 페이지 ★★★
 # ============================================
 def create_student_dashboard(student_df, student_name):
-    """개인 리포트용 대시보드 - 전광판과 동일한 디자인, X축만 날짜로"""
+    """개인 리포트용 대시보드 - 전광판과 동일한 디자인, 날짜 시계열 순서"""
     
-    student_df = student_df.copy()
+    student_df = student_df.copy().sort_values('날짜').reset_index(drop=True)
     student_df['status'] = student_df.apply(classify_student, axis=1)
-    
-    # 날짜별로 분류 (전광판에서 학생별 분류하듯이)
-    hero_df = student_df[student_df['status'] == 'hero'].copy()
-    villain_df = student_df[student_df['status'] == 'villain'].copy()
-    normal_df = student_df[student_df['status'] == 'normal'].copy()
-    midterm_df = student_df[student_df['status'] == 'midterm'].copy()
-    absent_df = student_df[student_df['status'] == 'absent'].copy()
     
     fig = go.Figure()
     
-    # 날짜 라벨 생성 함수 (M/D 형식)
-    def date_label(row):
+    all_labels = []
+    tick_positions = []
+    
+    hero_count = 0
+    villain_count = 0
+    normal_count = 0
+    midterm_count = 0
+    absent_count = 0
+    late_count = 0
+    
+    for idx, (_, row) in enumerate(student_df.iterrows()):
+        x_base = idx * STUDENT_WIDTH
+        status = row['status']
+        
+        # 날짜 라벨
         try:
             d = pd.to_datetime(row['날짜'])
             label = f"{d.month}/{d.day}"
-            if row['출석'] == '지각':
-                label += " ⏰"
-            return label
         except:
-            return row['날짜']
-    
-    # 1. 영웅 날짜들
-    for idx, (_, row) in enumerate(hero_df.iterrows()):
-        x_base = idx * STUDENT_WIDTH
-        fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
-            line=dict(color="#00C851", width=3), fillcolor="rgba(255,215,0,0.1)", layer="below")
-        add_hero_effect(fig, row, x_base)
-    
-    # 2. 정상 날짜들
-    normal_start = len(hero_df) * STUDENT_WIDTH + (1 if len(hero_df) > 0 else 0)
-    for idx, (_, row) in enumerate(normal_df.iterrows()):
-        x_base = normal_start + idx * STUDENT_WIDTH
-        fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
-            line=dict(color="rgba(100, 100, 100, 0.3)", width=2), fillcolor="rgba(0,0,0,0)", layer="below")
-        add_normal_bars(fig, row, x_base)
-    
-    # 3. 빌런 날짜들
-    villain_start = normal_start + len(normal_df) * STUDENT_WIDTH + (1 if len(normal_df) > 0 else 0)
-    for idx, (_, row) in enumerate(villain_df.iterrows()):
-        x_base = villain_start + idx * STUDENT_WIDTH
-        fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
-            line=dict(color="#8e44ad", width=3), fillcolor="rgba(142,68,173,0.1)", layer="below")
-        add_villain_effect(fig, row, x_base)
-    
-    # 4. 내신 날짜들
-    midterm_start = villain_start + len(villain_df) * STUDENT_WIDTH + (1 if len(villain_df) > 0 else 0)
-    add_midterm_section(fig, midterm_df, midterm_start)
-    
-    # 5. 결석 날짜들
-    absent_start = midterm_start + len(midterm_df) * STUDENT_WIDTH + (1 if len(midterm_df) > 0 else 0)
-    if len(absent_df) > 0:
-        fig.add_vrect(x0=absent_start - 0.5, x1=absent_start + len(absent_df) * STUDENT_WIDTH,
-            fillcolor="rgba(128, 128, 128, 0.1)", layer="below", line_width=0)
+            label = row['날짜']
+        if row['출석'] == '지각':
+            label += " ⏰"
+            late_count += 1
+        
+        all_labels.append(label)
+        tick_positions.append(x_base + 1.2)
+        
+        if status == 'hero':
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+                line=dict(color="#00C851", width=3), fillcolor="rgba(255,215,0,0.1)", layer="below")
+            add_hero_effect(fig, row, x_base)
+            hero_count += 1
+        elif status == 'villain':
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+                line=dict(color="#8e44ad", width=3), fillcolor="rgba(142,68,173,0.1)", layer="below")
+            add_villain_effect(fig, row, x_base)
+            villain_count += 1
+        elif status == 'midterm':
+            for i in range(4):
+                fig.add_trace(go.Bar(
+                    x=[x_base + i * 0.8], y=[40], width=0.7,
+                    marker=dict(color='rgba(255, 200, 100, 0.3)',
+                               pattern=dict(shape='/', size=8, solidity=0.2)),
+                    text='내신', textposition='inside', textfont=dict(size=9),
+                    showlegend=False, hovertemplate=f"{label} - 내신기간<extra></extra>"
+                ))
+            midterm_count += 1
+        elif status == 'absent':
+            fig.add_vrect(x0=x_base - 0.4, x1=x_base + 2.8,
+                fillcolor="rgba(128, 128, 128, 0.08)", layer="below", line_width=0)
+            absent_count += 1
+        else:
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+                line=dict(color="rgba(100, 100, 100, 0.3)", width=2), fillcolor="rgba(0,0,0,0)", layer="below")
+            add_normal_bars(fig, row, x_base)
+            normal_count += 1
     
     # 기준선
     fig.add_hline(y=94, line_dash="dash", line_color="rgba(255,0,0,0.3)",
                   annotation_text="어휘 기준 94점", annotation_position="right")
     fig.add_hline(y=80, line_dash="dash", line_color="rgba(0,0,255,0.3)",
                   annotation_text="스펠/독해 기준 80점", annotation_position="right")
-    
-    # X축 날짜 라벨
-    all_labels = []
-    tick_positions = []
-    
-    for idx, (_, row) in enumerate(hero_df.iterrows()):
-        all_labels.append(date_label(row))
-        tick_positions.append(idx * STUDENT_WIDTH + 1.2)
-    for idx, (_, row) in enumerate(normal_df.iterrows()):
-        all_labels.append(date_label(row))
-        tick_positions.append(normal_start + idx * STUDENT_WIDTH + 1.2)
-    for idx, (_, row) in enumerate(villain_df.iterrows()):
-        all_labels.append(date_label(row))
-        tick_positions.append(villain_start + idx * STUDENT_WIDTH + 1.2)
-    for idx, (_, row) in enumerate(midterm_df.iterrows()):
-        all_labels.append(date_label(row))
-        tick_positions.append(midterm_start + idx * STUDENT_WIDTH + 1.2)
-    for idx, (_, row) in enumerate(absent_df.iterrows()):
-        all_labels.append(date_label(row))
-        tick_positions.append(absent_start + idx * STUDENT_WIDTH + 1.2)
-    
-    # 구간 구분선
-    if len(hero_df) > 0 and len(normal_df) > 0:
-        fig.add_vline(x=normal_start - 0.5, line_dash="dot", line_color="#00C851", opacity=0.5)
-    if len(villain_df) > 0:
-        fig.add_vline(x=villain_start - 0.5, line_dash="dot", line_color="purple", opacity=0.5)
-    if len(midterm_df) > 0:
-        fig.add_vline(x=midterm_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
-    if len(absent_df) > 0:
-        fig.add_vline(x=absent_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
     
     fig.update_layout(
         title=None, height=900,
@@ -665,11 +641,9 @@ def create_student_dashboard(student_df, student_name):
         showlegend=False, hovermode='x'
     )
     
-    # 요약 텍스트
-    late_count = len(student_df[student_df['출석'] == '지각'])
     summary_text = f"""
     <div style='text-align: center; padding: 10px; background: white; border-radius: 5px;'>
-    <b>영웅: {len(hero_df)}일 | 빌런: {len(villain_df)}일 | 정상응시: {len(normal_df)}일 | 내신: {len(midterm_df)}일 | 결석: {len(absent_df)}일 | 지각: {late_count}일 ⏰</b>
+    <b>영웅: {hero_count}일 | 빌런: {villain_count}일 | 정상응시: {normal_count}일 | 내신: {midterm_count}일 | 결석: {absent_count}일 | 지각: {late_count}일 ⏰</b>
     </div>
     """
     
@@ -842,7 +816,7 @@ def page_student_report():
         <span style='color: #00C851;'>■ 통과</span> | 
         <span style='color: #FF4444;'>■ 미통과</span> | 
         <span style='color: #3498db;'>■ 문법 (커트없음)</span> |
-        <b>X축 = 날짜 (영웅 → 정상 → 빌런 → 내신 → 결석 순)</b>
+        <b>X축 = 날짜순 (금테=영웅 / 보라테=빌런 / 회색=정상)</b>
         </div>
         """, unsafe_allow_html=True)
     
