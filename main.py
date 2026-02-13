@@ -735,23 +735,81 @@ def page_student_report():
         
         student_classes = df.drop_duplicates('이름').set_index('이름')['반'].to_dict()
 
-        col1, col2 = st.columns([1, 1])
+        col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             selected_student = st.selectbox("학생 선택", all_students, index=0)
+        
+        # 해당 학생의 데이터 날짜 범위 확인
+        student_all = df[df['이름'] == selected_student].copy()
+        if len(student_all) == 0:
+            st.warning("해당 학생의 데이터가 없습니다.")
+            return
+        
+        min_date = student_all['날짜_obj'].min().date()
+        max_date = student_all['날짜_obj'].max().date()
+        today = datetime.now().date()
+        
+        # 월 목록 (프리셋용)
+        months = sorted(student_all['날짜_obj'].dropna().dt.to_period('M').unique(), reverse=True)
+        
+        # 기간 선택 옵션
+        period_options = []
+        for m in months:
+            period_options.append(str(m))
+        period_options.append("최근 2개월")
+        period_options.append("최근 3개월")
+        period_options.append("최근 6개월")
+        period_options.append("전체")
+        period_options.append("직접 선택")
+        
         with col2:
-            months = sorted(df['날짜_obj'].dropna().dt.to_period('M').unique(), reverse=True)
-            month_options = [str(m) for m in months]
-            if len(month_options) == 0:
-                st.error("월 데이터가 없습니다.")
-                return
-            selected_month = st.selectbox("월 선택", month_options, index=0)
+            selected_period = st.selectbox("기간", period_options, index=0)
+        
+        # 기간에 따라 시작/종료 날짜 결정
+        if selected_period == "직접 선택":
+            with col3:
+                custom_start = st.date_input("시작일", value=max(min_date, today - timedelta(days=90)),
+                    min_value=min_date, max_value=max_date, format="YYYY-MM-DD")
+            start_date = pd.Timestamp(custom_start)
+            end_date = pd.Timestamp(today)
+            period_display = f"{custom_start.strftime('%m/%d')}~현재"
+        elif selected_period == "최근 2개월":
+            start_date = pd.Timestamp(today - timedelta(days=60))
+            end_date = pd.Timestamp(today)
+            period_display = "최근 2개월"
+        elif selected_period == "최근 3개월":
+            start_date = pd.Timestamp(today - timedelta(days=90))
+            end_date = pd.Timestamp(today)
+            period_display = "최근 3개월"
+        elif selected_period == "최근 6개월":
+            start_date = pd.Timestamp(today - timedelta(days=180))
+            end_date = pd.Timestamp(today)
+            period_display = "최근 6개월"
+        elif selected_period == "전체":
+            start_date = pd.Timestamp(min_date)
+            end_date = pd.Timestamp(today)
+            period_display = "전체"
+        else:
+            # 월 선택
+            try:
+                period_obj = pd.Period(selected_period)
+                start_date = pd.Timestamp(period_obj.start_time)
+                end_date = pd.Timestamp(period_obj.end_time)
+                period_display = pd.to_datetime(selected_period).strftime('%Y년 %m월')
+            except:
+                start_date = pd.Timestamp(min_date)
+                end_date = pd.Timestamp(today)
+                period_display = selected_period
 
-        student_df = df[df['이름'] == selected_student].copy()
-        student_df = student_df[student_df['날짜_obj'].dt.to_period('M').astype(str) == selected_month]
+        # 필터링
+        student_df = student_all[
+            (student_all['날짜_obj'] >= start_date) & 
+            (student_all['날짜_obj'] <= end_date)
+        ].copy()
         student_df = student_df.sort_values('날짜').reset_index(drop=True)
 
         if len(student_df) == 0:
-            st.warning("해당 월에 데이터가 없습니다.")
+            st.warning("해당 기간에 데이터가 없습니다.")
             return
 
         ban = student_classes.get(selected_student, '?')
@@ -764,14 +822,9 @@ def page_student_report():
         hero_pct = (hero_days / attend_days * 100) if attend_days > 0 else 0
 
         # 타이틀
-        try:
-            month_display = pd.to_datetime(selected_month).strftime('%Y년 %m월')
-        except:
-            month_display = selected_month
-        
         st.markdown(
             f"<h1 style='margin:0 0 5px 0;font-size:20px;'>"
-            f"{selected_student} ({ban}) | {month_display} 개인현황 "
+            f"{selected_student} ({ban}) | {period_display} 개인현황 "
             f"(영웅 {hero_days}회/{attend_days}일 = {hero_pct:.0f}%)</h1>",
             unsafe_allow_html=True
         )
