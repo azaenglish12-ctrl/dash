@@ -556,210 +556,126 @@ def create_dashboard(selected_date, excluded_students=[]):
 
 
 # ============================================
-# ★★★ 개인 리포트 전용 함수들 ★★★
-# ============================================
-
-def render_report_header(name, ban, month_str, stats):
-    """개인 리포트 상단 헤더"""
-    hero_pct = stats.get('hero_pct', 0)
-    total_days = stats.get('total_days', 0)
-    attend_days = stats.get('attend_days', 0)
-    hero_days = stats.get('hero_days', 0)
-    absent_days = stats.get('absent_days', 0)
-    late_days = stats.get('late_days', 0)
-
-    if hero_pct >= 80:
-        grade, grade_color, grade_bg = 'S', '#FFD700', 'linear-gradient(135deg,#FFD700,#FF6B00)'
-    elif hero_pct >= 60:
-        grade, grade_color, grade_bg = 'A', '#C0C0C0', 'linear-gradient(135deg,#C0C0C0,#8E8E8E)'
-    elif hero_pct >= 40:
-        grade, grade_color, grade_bg = 'B', '#CD7F32', 'linear-gradient(135deg,#CD7F32,#A0522D)'
-    elif hero_pct >= 20:
-        grade, grade_color, grade_bg = 'C', '#2E8B57', '#2E8B57'
-    else:
-        grade, grade_color, grade_bg = 'D', '#708090', '#708090'
-
-    return f"""
-    <div style="display:flex;align-items:center;gap:20px;padding:16px 24px;
-        background:linear-gradient(135deg,#1a2332 0%,#0f1923 100%);
-        border:1px solid rgba(255,255,255,0.1);border-radius:16px;margin-bottom:12px;">
-        <div style="display:flex;align-items:center;justify-content:center;width:64px;height:64px;
-            background:{grade_bg};border-radius:14px;flex-shrink:0;">
-            <span style="font-size:32px;font-weight:900;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.3);">{grade}</span>
-        </div>
-        <div style="flex:1;">
-            <div style="font-size:24px;font-weight:800;color:#e8e8e8;letter-spacing:-0.5px;">
-                {name}
-                <span style="font-size:13px;font-weight:500;color:#888;margin-left:8px;
-                    padding:3px 10px;border:1px solid #444;border-radius:20px;">{ban}</span>
-            </div>
-            <div style="font-size:13px;color:#888;margin-top:4px;">
-                {month_str} 리포트 &nbsp;|&nbsp;
-                출석 {attend_days}/{total_days}일 &nbsp;|&nbsp;
-                결석 {absent_days}일 &nbsp;|&nbsp;
-                지각 {late_days}일
-            </div>
-        </div>
-        <div style="text-align:center;padding:8px 20px;background:rgba(255,255,255,0.03);
-            border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
-            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;">영웅 달성률</div>
-            <div style="font-size:30px;font-weight:900;color:{grade_color};margin-top:2px;">{hero_pct:.0f}%</div>
-            <div style="font-size:11px;color:#666;">{hero_days}회 / {attend_days}일</div>
-        </div>
-    </div>"""
-
-def render_summary_cards(attend_df):
-    """과목별 요약 카드"""
-    subjects = [
-        ('어휘점수', 94, '어휘', '#4ade80'),
-        ('스펠점수', 90, '문맥', '#facc15'),
-        ('독해점수', 80, '독해', '#60a5fa'),
-        ('문법점수', None, '문법', '#c084fc'),
-    ]
-    cards_html = ""
-    for col, cutoff, label, color in subjects:
-        if col not in attend_df.columns:
-            cards_html += f"""<div style="flex:1;min-width:140px;background:#1a2332;border:1px solid rgba(255,255,255,0.06);
-                border-radius:12px;padding:14px;text-align:center;">
-                <div style="font-size:12px;color:#666;">{label}</div>
-                <div style="font-size:24px;font-weight:800;color:#444;margin:6px 0;">-</div>
-            </div>"""
-            continue
-        valid = attend_df[col].dropna()
-        if len(valid) == 0:
-            cards_html += f"""<div style="flex:1;min-width:140px;background:#1a2332;border:1px solid rgba(255,255,255,0.06);
-                border-radius:12px;padding:14px;text-align:center;">
-                <div style="font-size:12px;color:#666;">{label}</div>
-                <div style="font-size:24px;font-weight:800;color:#444;margin:6px 0;">-</div>
-            </div>"""
-            continue
-        avg = valid.mean()
-        high = valid.max()
-        low = valid.min()
-        pass_rate = (valid >= cutoff).sum() / len(valid) * 100 if cutoff else None
-
-        trend_icon = ""
-        if len(valid) >= 3:
-            diff = valid.iloc[-3:].mean() - valid.iloc[:3].mean()
-            if diff > 2: trend_icon = '<span style="color:#4ade80;font-size:14px;">&#9650;</span>'
-            elif diff < -2: trend_icon = '<span style="color:#ef4444;font-size:14px;">&#9660;</span>'
-            else: trend_icon = '<span style="color:#888;font-size:12px;">&#9644;</span>'
-
-        pass_html = ""
-        if pass_rate is not None:
-            pbar_color = color if pass_rate >= 70 else '#ef4444'
-            pass_html = f"""<div style="margin-top:8px;">
-                <div style="font-size:10px;color:#666;">통과율 {pass_rate:.0f}%</div>
-                <div style="background:rgba(255,255,255,0.06);border-radius:4px;height:5px;margin-top:3px;">
-                    <div style="background:{pbar_color};width:{pass_rate}%;height:100%;border-radius:4px;"></div>
-                </div></div>"""
-
-        cards_html += f"""<div style="flex:1;min-width:140px;background:linear-gradient(135deg,#1a2332,#0f1923);
-            border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:14px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-size:12px;color:{color};font-weight:700;">{label}</span>{trend_icon}
-            </div>
-            <div style="font-size:28px;font-weight:900;color:#e0e0e0;margin:6px 0;">{avg:.1f}</div>
-            <div style="display:flex;justify-content:space-between;font-size:10px;color:#666;">
-                <span>최고 {high:.0f}</span><span>최저 {low:.0f}</span>
-            </div>{pass_html}</div>"""
-
-    return f"""<div style="display:flex;gap:10px;flex-wrap:wrap;">{cards_html}</div>"""
-
-def create_trend_chart(attend_df):
-    """과목별 점수 추이 차트"""
-    fig = make_subplots(rows=2, cols=2,
-        subplot_titles=('어휘 (커트 94)', '문맥 (커트 90)', '독해 (커트 80)', '문법 (참고)'),
-        vertical_spacing=0.14, horizontal_spacing=0.08)
-
-    subjects = [
-        ('어휘점수', 94, 1, 1, '#4ade80'),
-        ('스펠점수', 90, 1, 2, '#facc15'),
-        ('독해점수', 80, 2, 1, '#60a5fa'),
-        ('문법점수', None, 2, 2, '#c084fc'),
-    ]
-    for col_name, cutoff, r, c, color_pass in subjects:
-        if col_name not in attend_df.columns:
-            continue
-        sub = attend_df.dropna(subset=[col_name]).copy()
-        if len(sub) == 0:
-            continue
-        dates = sub['날짜'].apply(lambda x: str(x)[5:] if len(str(x)) >= 5 else str(x))  # MM-DD
-        scores = sub[col_name]
-        colors = [color_pass if (cutoff is None or s >= cutoff) else '#ef4444' for s in scores]
-
-        fig.add_trace(go.Bar(
-            x=dates, y=scores, marker_color=colors,
-            text=[f"{int(s)}" for s in scores], textposition='outside',
-            textfont=dict(size=9, color='#aaa'), showlegend=False,
-            hovertemplate='%{x}<br>%{y}점<extra></extra>'
-        ), row=r, col=c)
-
-        if len(sub) >= 3:
-            z = np.polyfit(range(len(scores)), scores, 1)
-            p = np.poly1d(z)
-            trend_y = [p(i) for i in range(len(scores))]
-            fig.add_trace(go.Scatter(
-                x=dates, y=trend_y, mode='lines',
-                line=dict(color=color_pass if z[0] >= 0 else '#ef4444', width=2, dash='dot'),
-                showlegend=False, hoverinfo='skip'
-            ), row=r, col=c)
-
-        if cutoff is not None:
-            fig.add_hline(y=cutoff, line_dash="dash", line_color="rgba(255,100,100,0.4)", row=r, col=c)
-
-    fig.update_layout(
-        height=480, margin=dict(l=40, r=20, t=40, b=40),
-        plot_bgcolor='#0f1923', paper_bgcolor='#f5f5f5',
-        font=dict(color='#aaa', size=11), bargap=0.3,
-    )
-    fig.update_xaxes(showgrid=False, tickfont=dict(size=8, color='#666'), tickangle=-45)
-    fig.update_yaxes(range=[0, 110], gridcolor='rgba(255,255,255,0.06)', tickfont=dict(size=9, color='#666'))
-    for ann in fig['layout']['annotations']:
-        ann['font'] = dict(size=13, color='#555')
-    return fig
-
-def render_daily_table(student_df):
-    """일별 상세 테이블"""
-    rows_html = ""
-    for _, row in student_df.iterrows():
-        date_short = row['날짜'][5:]
-        if row['출석'] == '결석':
-            rows_html += f"""<tr style="background:rgba(0,0,0,0.02);">
-                <td style="padding:6px 10px;color:#999;font-weight:600;">{date_short}</td>
-                <td colspan="4" style="text-align:center;color:#aaa;font-style:italic;">결석</td></tr>"""
-            continue
-        hero = is_hero(row)
-        att = ' <span style="color:#e67e22;font-size:10px;">지각</span>' if row['출석'] == '지각' else ''
-        hero_badge = ' <span style="background:linear-gradient(135deg,#FFD700,#FF6B00);color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;">HERO</span>' if hero else ''
-        row_bg = 'rgba(255,215,0,0.06)' if hero else 'white'
-
-        def cell(val, cutoff=None):
-            if pd.isna(val): return '<td style="padding:6px 10px;color:#ccc;text-align:center;">-</td>'
-            v = float(val)
-            if cutoff is None: color = '#8e44ad'
-            elif v >= cutoff: color = '#27ae60'
-            else: color = '#e74c3c'
-            return f'<td style="padding:6px 10px;color:{color};text-align:center;font-weight:700;">{v:.0f}</td>'
-
-        rows_html += f"""<tr style="background:{row_bg};border-bottom:1px solid #eee;">
-            <td style="padding:6px 10px;color:#333;font-weight:600;">{date_short}{att}{hero_badge}</td>
-            {cell(row['어휘점수'], 94)}{cell(row['스펠점수'], 90)}{cell(row['독해점수'], 80)}{cell(row.get('문법점수', None))}</tr>"""
-
-    return f"""<div style="border:1px solid #ddd;border-radius:12px;overflow:hidden;background:white;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead><tr style="background:#f0f0f0;">
-                <th style="padding:8px 10px;text-align:left;color:#555;">날짜</th>
-                <th style="padding:8px 10px;text-align:center;color:#27ae60;font-weight:700;">어휘<br><span style="font-size:10px;color:#999;">94</span></th>
-                <th style="padding:8px 10px;text-align:center;color:#e67e22;font-weight:700;">문맥<br><span style="font-size:10px;color:#999;">90</span></th>
-                <th style="padding:8px 10px;text-align:center;color:#2980b9;font-weight:700;">독해<br><span style="font-size:10px;color:#999;">80</span></th>
-                <th style="padding:8px 10px;text-align:center;color:#8e44ad;font-weight:700;">문법<br><span style="font-size:10px;color:#999;">-</span></th>
-            </tr></thead><tbody>{rows_html}</tbody></table></div>"""
-
-
-# ============================================
 # ★★★ 개인 리포트 페이지 ★★★
 # ============================================
+def create_student_dashboard(student_df, student_name):
+    """개인 리포트용 대시보드 - 전광판과 동일한 디자인, X축만 날짜로"""
+    
+    student_df = student_df.copy()
+    student_df['status'] = student_df.apply(classify_student, axis=1)
+    
+    # 날짜별로 분류 (전광판에서 학생별 분류하듯이)
+    hero_df = student_df[student_df['status'] == 'hero'].copy()
+    villain_df = student_df[student_df['status'] == 'villain'].copy()
+    normal_df = student_df[student_df['status'] == 'normal'].copy()
+    midterm_df = student_df[student_df['status'] == 'midterm'].copy()
+    absent_df = student_df[student_df['status'] == 'absent'].copy()
+    
+    fig = go.Figure()
+    
+    # 날짜 라벨 생성 함수 (M/D 형식)
+    def date_label(row):
+        try:
+            d = pd.to_datetime(row['날짜'])
+            label = f"{d.month}/{d.day}"
+            if row['출석'] == '지각':
+                label += " ⏰"
+            return label
+        except:
+            return row['날짜']
+    
+    # 1. 영웅 날짜들
+    for idx, (_, row) in enumerate(hero_df.iterrows()):
+        x_base = idx * STUDENT_WIDTH
+        fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+            line=dict(color="#00C851", width=3), fillcolor="rgba(255,215,0,0.1)", layer="below")
+        add_hero_effect(fig, row, x_base)
+    
+    # 2. 정상 날짜들
+    normal_start = len(hero_df) * STUDENT_WIDTH + (1 if len(hero_df) > 0 else 0)
+    for idx, (_, row) in enumerate(normal_df.iterrows()):
+        x_base = normal_start + idx * STUDENT_WIDTH
+        fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+            line=dict(color="rgba(100, 100, 100, 0.3)", width=2), fillcolor="rgba(0,0,0,0)", layer="below")
+        add_normal_bars(fig, row, x_base)
+    
+    # 3. 빌런 날짜들
+    villain_start = normal_start + len(normal_df) * STUDENT_WIDTH + (1 if len(normal_df) > 0 else 0)
+    for idx, (_, row) in enumerate(villain_df.iterrows()):
+        x_base = villain_start + idx * STUDENT_WIDTH
+        fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+            line=dict(color="#8e44ad", width=3), fillcolor="rgba(142,68,173,0.1)", layer="below")
+        add_villain_effect(fig, row, x_base)
+    
+    # 4. 내신 날짜들
+    midterm_start = villain_start + len(villain_df) * STUDENT_WIDTH + (1 if len(villain_df) > 0 else 0)
+    add_midterm_section(fig, midterm_df, midterm_start)
+    
+    # 5. 결석 날짜들
+    absent_start = midterm_start + len(midterm_df) * STUDENT_WIDTH + (1 if len(midterm_df) > 0 else 0)
+    if len(absent_df) > 0:
+        fig.add_vrect(x0=absent_start - 0.5, x1=absent_start + len(absent_df) * STUDENT_WIDTH,
+            fillcolor="rgba(128, 128, 128, 0.1)", layer="below", line_width=0)
+    
+    # 기준선
+    fig.add_hline(y=94, line_dash="dash", line_color="rgba(255,0,0,0.3)",
+                  annotation_text="어휘 기준 94점", annotation_position="right")
+    fig.add_hline(y=80, line_dash="dash", line_color="rgba(0,0,255,0.3)",
+                  annotation_text="스펠/독해 기준 80점", annotation_position="right")
+    
+    # X축 날짜 라벨
+    all_labels = []
+    tick_positions = []
+    
+    for idx, (_, row) in enumerate(hero_df.iterrows()):
+        all_labels.append(date_label(row))
+        tick_positions.append(idx * STUDENT_WIDTH + 1.2)
+    for idx, (_, row) in enumerate(normal_df.iterrows()):
+        all_labels.append(date_label(row))
+        tick_positions.append(normal_start + idx * STUDENT_WIDTH + 1.2)
+    for idx, (_, row) in enumerate(villain_df.iterrows()):
+        all_labels.append(date_label(row))
+        tick_positions.append(villain_start + idx * STUDENT_WIDTH + 1.2)
+    for idx, (_, row) in enumerate(midterm_df.iterrows()):
+        all_labels.append(date_label(row))
+        tick_positions.append(midterm_start + idx * STUDENT_WIDTH + 1.2)
+    for idx, (_, row) in enumerate(absent_df.iterrows()):
+        all_labels.append(date_label(row))
+        tick_positions.append(absent_start + idx * STUDENT_WIDTH + 1.2)
+    
+    # 구간 구분선
+    if len(hero_df) > 0 and len(normal_df) > 0:
+        fig.add_vline(x=normal_start - 0.5, line_dash="dot", line_color="#00C851", opacity=0.5)
+    if len(villain_df) > 0:
+        fig.add_vline(x=villain_start - 0.5, line_dash="dot", line_color="purple", opacity=0.5)
+    if len(midterm_df) > 0:
+        fig.add_vline(x=midterm_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
+    if len(absent_df) > 0:
+        fig.add_vline(x=absent_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
+    
+    fig.update_layout(
+        title=None, height=900,
+        margin=dict(l=60, r=60, t=10, b=150),
+        xaxis=dict(ticktext=all_labels, tickvals=tick_positions,
+                   tickfont=dict(size=12), tickangle=0),
+        yaxis=dict(range=[0, 115], title=dict(text="점수", font=dict(size=14)),
+                   gridcolor='rgba(128,128,128,0.2)'),
+        plot_bgcolor='white', paper_bgcolor='#f5f5f5',
+        bargap=0.1, bargroupgap=0.05,
+        showlegend=False, hovermode='x'
+    )
+    
+    # 요약 텍스트
+    late_count = len(student_df[student_df['출석'] == '지각'])
+    summary_text = f"""
+    <div style='text-align: center; padding: 10px; background: white; border-radius: 5px;'>
+    <b>영웅: {len(hero_df)}일 | 빌런: {len(villain_df)}일 | 정상응시: {len(normal_df)}일 | 내신: {len(midterm_df)}일 | 결석: {len(absent_df)}일 | 지각: {late_count}일 ⏰</b>
+    </div>
+    """
+    
+    return fig, summary_text
+
+
 def page_student_report():
     """개인 리포트 탭"""
     try:
@@ -793,9 +709,8 @@ def page_student_report():
             st.error("유효한 날짜 데이터가 없습니다.")
             return
         
-        # 날짜 변환 (다양한 형식 대응)
+        # 날짜 변환
         df['날짜_obj'] = pd.to_datetime(df['날짜'], errors='coerce', format='mixed')
-        # 날짜 변환 실패 시 여러 포맷 시도
         if df['날짜_obj'].isna().all():
             for fmt in ['%Y-%m-%d', '%Y. %m. %d', '%Y.%m.%d', '%Y/%m/%d']:
                 try:
@@ -805,7 +720,6 @@ def page_student_report():
                 except:
                     continue
         
-        # 날짜 표준화 (YYYY-MM-DD 문자열로)
         valid_mask = df['날짜_obj'].notna()
         df.loc[valid_mask, '날짜'] = df.loc[valid_mask, '날짜_obj'].dt.strftime('%Y-%m-%d')
         df = df[valid_mask].copy()
@@ -849,46 +763,40 @@ def page_student_report():
         hero_days = int(student_df['is_hero'].sum())
         hero_pct = (hero_days / attend_days * 100) if attend_days > 0 else 0
 
-        stats = {'total_days': total_days, 'attend_days': attend_days,
-                 'absent_days': absent_days, 'late_days': late_days,
-                 'hero_days': hero_days, 'hero_pct': hero_pct}
-
-        # 헤더
-        header_html = render_report_header(selected_student, ban, selected_month, stats)
-        components.html(
-            f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{header_html}</body></html>",
-            height=110, scrolling=False)
-
-        # 과목별 요약 카드
-        attend_df = student_df[student_df['출석'] != '결석']
-        cards_html = render_summary_cards(attend_df)
-        components.html(
-            f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{cards_html}</body></html>",
-            height=130, scrolling=False)
-
-        # 추이 차트
-        if len(attend_df) > 0:
-            st.plotly_chart(create_trend_chart(attend_df), use_container_width=True, config={'displayModeBar': False})
-
-        # 일별 상세 테이블
-        st.markdown("**일별 상세**")
-        table_html = render_daily_table(student_df)
-        table_height = min(60 + len(student_df) * 34, 800)
-        components.html(
-            f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{table_html}</body></html>",
-            height=table_height, scrolling=True)
+        # 타이틀
+        try:
+            month_display = pd.to_datetime(selected_month).strftime('%Y년 %m월')
+        except:
+            month_display = selected_month
+        
+        st.markdown(
+            f"<h1 style='margin:0 0 5px 0;font-size:20px;'>"
+            f"{selected_student} ({ban}) | {month_display} 개인현황 "
+            f"(영웅 {hero_days}회/{attend_days}일 = {hero_pct:.0f}%)</h1>",
+            unsafe_allow_html=True
+        )
+        
+        # ★ 전광판과 동일한 차트 생성
+        fig, summary = create_student_dashboard(student_df, selected_student)
+        
+        if fig is not None:
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.markdown(summary, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style='text-align: center; padding: 10px; margin-top: 10px; background: #f0f0f0; border-radius: 5px;'>
+        <b>막대 색상:</b> 
+        <span style='color: #00C851;'>■ 통과</span> | 
+        <span style='color: #FF4444;'>■ 미통과</span> | 
+        <span style='color: #3498db;'>■ 문법 (커트없음)</span> |
+        <b>X축 = 날짜 (영웅 → 정상 → 빌런 → 내신 → 결석 순)</b>
+        </div>
+        """, unsafe_allow_html=True)
     
     except Exception as e:
         st.error(f"개인 리포트 로드 중 오류 발생: {e}")
         import traceback
         st.code(traceback.format_exc())
-        # 디버깅용: 컬럼 정보 표시
-        try:
-            df_debug = load_data()
-            st.write("컬럼 목록:", list(df_debug.columns))
-            st.write("샘플 데이터:", df_debug.head(3))
-        except:
-            pass
 
 
 # ============================================
