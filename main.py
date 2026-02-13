@@ -1077,15 +1077,15 @@ def page_scoreboard():
 
 
 # ============================================
-# ★★★ 메인: 탭으로 전광판 / 개인리포트 전환 ★★★
+# ★★★ 메인: 라디오 버튼으로 전광판 / 개인리포트 전환 ★★★
 # ============================================
 def main():
-    tab1, tab2 = st.tabs(["전광판", "개인 리포트"])
+    page = st.radio("", ["전광판", "개인 리포트"], horizontal=True, label_visibility="collapsed")
+    st.markdown("<hr style='margin:0 0 5px 0;padding:0;border-color:#eee;'>", unsafe_allow_html=True)
     
-    with tab1:
+    if page == "전광판":
         page_scoreboard()
-    
-    with tab2:
+    else:
         page_student_report()
 
 if __name__ == "__main__":
