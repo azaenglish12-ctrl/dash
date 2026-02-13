@@ -618,6 +618,13 @@ def render_summary_cards(attend_df):
     ]
     cards_html = ""
     for col, cutoff, label, color in subjects:
+        if col not in attend_df.columns:
+            cards_html += f"""<div style="flex:1;min-width:140px;background:#1a2332;border:1px solid rgba(255,255,255,0.06);
+                border-radius:12px;padding:14px;text-align:center;">
+                <div style="font-size:12px;color:#666;">{label}</div>
+                <div style="font-size:24px;font-weight:800;color:#444;margin:6px 0;">-</div>
+            </div>"""
+            continue
         valid = attend_df[col].dropna()
         if len(valid) == 0:
             cards_html += f"""<div style="flex:1;min-width:140px;background:#1a2332;border:1px solid rgba(255,255,255,0.06);
@@ -672,10 +679,12 @@ def create_trend_chart(attend_df):
         ('문법점수', None, 2, 2, '#c084fc'),
     ]
     for col_name, cutoff, r, c, color_pass in subjects:
+        if col_name not in attend_df.columns:
+            continue
         sub = attend_df.dropna(subset=[col_name]).copy()
         if len(sub) == 0:
             continue
-        dates = sub['날짜'].apply(lambda x: x[5:])  # MM-DD
+        dates = sub['날짜'].apply(lambda x: str(x)[5:] if len(str(x)) >= 5 else str(x))  # MM-DD
         scores = sub[col_name]
         colors = [color_pass if (cutoff is None or s >= cutoff) else '#ef4444' for s in scores]
 
@@ -735,7 +744,7 @@ def render_daily_table(student_df):
 
         rows_html += f"""<tr style="background:{row_bg};border-bottom:1px solid #eee;">
             <td style="padding:6px 10px;color:#333;font-weight:600;">{date_short}{att}{hero_badge}</td>
-            {cell(row['어휘점수'], 94)}{cell(row['스펠점수'], 90)}{cell(row['독해점수'], 80)}{cell(row.get('문법점수'))}</tr>"""
+            {cell(row['어휘점수'], 94)}{cell(row['스펠점수'], 90)}{cell(row['독해점수'], 80)}{cell(row.get('문법점수', None))}</tr>"""
 
     return f"""<div style="border:1px solid #ddd;border-radius:12px;overflow:hidden;background:white;">
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -753,66 +762,133 @@ def render_daily_table(student_df):
 # ============================================
 def page_student_report():
     """개인 리포트 탭"""
-    df = load_data()
-    df['날짜'] = df['날짜'].astype(str)
-    df = df[(df['날짜'] != 'nan') & (df['날짜'] != '')]
-    df['날짜_obj'] = pd.to_datetime(df['날짜'], errors='coerce')
+    try:
+        df = load_data()
+        
+        if df is None or len(df) == 0:
+            st.error("데이터를 불러올 수 없습니다.")
+            return
+        
+        # 컬럼 확인 및 없는 컬럼 기본값 추가
+        for col in ['어휘점수', '스펠점수', '독해점수', '문법점수']:
+            if col not in df.columns:
+                df[col] = None
+        if '반' not in df.columns:
+            if '반코드' in df.columns:
+                df = df.rename(columns={'반코드': '반'})
+            else:
+                df['반'] = '미지정'
+        if '출석' not in df.columns:
+            df['출석'] = '출석'
+        
+        # 점수 컬럼 숫자 변환
+        for col in ['어휘점수', '스펠점수', '독해점수', '문법점수']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        df['날짜'] = df['날짜'].astype(str).str.strip()
+        df = df[(df['날짜'] != 'nan') & (df['날짜'] != '') & (df['날짜'] != 'None')]
+        
+        if len(df) == 0:
+            st.error("유효한 날짜 데이터가 없습니다.")
+            return
+        
+        # 날짜 변환 (다양한 형식 대응)
+        df['날짜_obj'] = pd.to_datetime(df['날짜'], errors='coerce', format='mixed')
+        # 날짜 변환 실패 시 여러 포맷 시도
+        if df['날짜_obj'].isna().all():
+            for fmt in ['%Y-%m-%d', '%Y. %m. %d', '%Y.%m.%d', '%Y/%m/%d']:
+                try:
+                    df['날짜_obj'] = pd.to_datetime(df['날짜'], format=fmt, errors='coerce')
+                    if df['날짜_obj'].notna().any():
+                        break
+                except:
+                    continue
+        
+        # 날짜 표준화 (YYYY-MM-DD 문자열로)
+        valid_mask = df['날짜_obj'].notna()
+        df.loc[valid_mask, '날짜'] = df.loc[valid_mask, '날짜_obj'].dt.strftime('%Y-%m-%d')
+        df = df[valid_mask].copy()
+        
+        if len(df) == 0:
+            st.error("날짜를 파싱할 수 없습니다.")
+            return
+        
+        all_students = sorted(df['이름'].unique().tolist())
+        if len(all_students) == 0:
+            st.error("학생 데이터가 없습니다.")
+            return
+        
+        student_classes = df.drop_duplicates('이름').set_index('이름')['반'].to_dict()
 
-    all_students = sorted(df['이름'].unique().tolist())
-    student_classes = df.drop_duplicates('이름').set_index('이름')['반'].to_dict()
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            selected_student = st.selectbox("학생 선택", all_students, index=0)
+        with col2:
+            months = df['날짜_obj'].dropna().dt.to_period('M').unique().sort_values(ascending=False)
+            month_options = [str(m) for m in months]
+            if len(month_options) == 0:
+                st.error("월 데이터가 없습니다.")
+                return
+            selected_month = st.selectbox("월 선택", month_options, index=0)
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        selected_student = st.selectbox("학생 선택", all_students, index=0)
-    with col2:
-        months = df['날짜_obj'].dropna().dt.to_period('M').unique().sort_values(ascending=False)
-        month_options = [str(m) for m in months]
-        selected_month = st.selectbox("월 선택", month_options, index=0)
+        student_df = df[df['이름'] == selected_student].copy()
+        student_df = student_df[student_df['날짜_obj'].dt.to_period('M').astype(str) == selected_month]
+        student_df = student_df.sort_values('날짜').reset_index(drop=True)
 
-    student_df = df[df['이름'] == selected_student].copy()
-    student_df = student_df[student_df['날짜_obj'].dt.to_period('M').astype(str) == selected_month]
-    student_df = student_df.sort_values('날짜').reset_index(drop=True)
+        if len(student_df) == 0:
+            st.warning("해당 월에 데이터가 없습니다.")
+            return
 
-    if len(student_df) == 0:
-        st.warning("해당 월에 데이터가 없습니다.")
-        return
+        ban = student_classes.get(selected_student, '?')
+        total_days = len(student_df)
+        absent_days = int((student_df['출석'] == '결석').sum())
+        late_days = int((student_df['출석'] == '지각').sum())
+        attend_days = total_days - absent_days
+        student_df['is_hero'] = student_df.apply(is_hero, axis=1)
+        hero_days = int(student_df['is_hero'].sum())
+        hero_pct = (hero_days / attend_days * 100) if attend_days > 0 else 0
 
-    ban = student_classes.get(selected_student, '?')
-    total_days = len(student_df)
-    absent_days = int((student_df['출석'] == '결석').sum())
-    late_days = int((student_df['출석'] == '지각').sum())
-    attend_days = total_days - absent_days
-    student_df['is_hero'] = student_df.apply(is_hero, axis=1)
-    hero_days = int(student_df['is_hero'].sum())
-    hero_pct = (hero_days / attend_days * 100) if attend_days > 0 else 0
+        stats = {'total_days': total_days, 'attend_days': attend_days,
+                 'absent_days': absent_days, 'late_days': late_days,
+                 'hero_days': hero_days, 'hero_pct': hero_pct}
 
-    stats = {'total_days': total_days, 'attend_days': attend_days,
-             'absent_days': absent_days, 'late_days': late_days,
-             'hero_days': hero_days, 'hero_pct': hero_pct}
+        # 헤더
+        header_html = render_report_header(selected_student, ban, selected_month, stats)
+        components.html(
+            f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{header_html}</body></html>",
+            height=110, scrolling=False)
 
-    # 헤더
-    header_html = render_report_header(selected_student, ban, selected_month, stats)
-    components.html(
-        f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{header_html}</body></html>",
-        height=110, scrolling=False)
+        # 과목별 요약 카드
+        attend_df = student_df[student_df['출석'] != '결석']
+        cards_html = render_summary_cards(attend_df)
+        components.html(
+            f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{cards_html}</body></html>",
+            height=130, scrolling=False)
 
-    # 과목별 요약 카드
-    attend_df = student_df[student_df['출석'] != '결석']
-    cards_html = render_summary_cards(attend_df)
-    components.html(
-        f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{cards_html}</body></html>",
-        height=130, scrolling=False)
+        # 추이 차트
+        if len(attend_df) > 0:
+            st.plotly_chart(create_trend_chart(attend_df), use_container_width=True, config={'displayModeBar': False})
 
-    # 추이 차트
-    st.plotly_chart(create_trend_chart(attend_df), use_container_width=True, config={'displayModeBar': False})
-
-    # 일별 상세 테이블
-    st.markdown("**일별 상세**")
-    table_html = render_daily_table(student_df)
-    table_height = min(60 + len(student_df) * 34, 800)
-    components.html(
-        f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{table_html}</body></html>",
-        height=table_height, scrolling=True)
+        # 일별 상세 테이블
+        st.markdown("**일별 상세**")
+        table_html = render_daily_table(student_df)
+        table_height = min(60 + len(student_df) * 34, 800)
+        components.html(
+            f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{table_html}</body></html>",
+            height=table_height, scrolling=True)
+    
+    except Exception as e:
+        st.error(f"개인 리포트 로드 중 오류 발생: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+        # 디버깅용: 컬럼 정보 표시
+        try:
+            df_debug = load_data()
+            st.write("컬럼 목록:", list(df_debug.columns))
+            st.write("샘플 데이터:", df_debug.head(3))
+        except:
+            pass
 
 
 # ============================================
