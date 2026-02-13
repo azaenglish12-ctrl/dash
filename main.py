@@ -726,8 +726,8 @@ def page_student_report():
         # 월 목록 (프리셋용)
         months = sorted(student_all['날짜_obj'].dropna().dt.to_period('M').unique(), reverse=True)
         
-        # 기간 선택 옵션
-        period_options = []
+        # 기간 선택 옵션 - "1월~현재"를 맨 앞(기본값)으로
+        period_options = ["1월~현재"]
         for m in months:
             period_options.append(str(m))
         period_options.append("최근 2개월")
@@ -740,7 +740,11 @@ def page_student_report():
             selected_period = st.selectbox("기간", period_options, index=0)
         
         # 기간에 따라 시작/종료 날짜 결정
-        if selected_period == "직접 선택":
+        if selected_period == "1월~현재":
+            start_date = pd.Timestamp("2026-01-01")
+            end_date = pd.Timestamp(today)
+            period_display = "2026년 1월~현재"
+        elif selected_period == "직접 선택":
             with col3:
                 custom_start = st.date_input("시작일", value=max(min_date, today - timedelta(days=90)),
                     min_value=min_date, max_value=max_date, format="YYYY-MM-DD")
