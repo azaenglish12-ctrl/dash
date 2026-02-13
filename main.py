@@ -825,7 +825,7 @@ def page_student_report():
         with col1:
             selected_student = st.selectbox("학생 선택", all_students, index=0)
         with col2:
-            months = df['날짜_obj'].dropna().dt.to_period('M').unique().sort_values(ascending=False)
+            months = sorted(df['날짜_obj'].dropna().dt.to_period('M').unique(), reverse=True)
             month_options = [str(m) for m in months]
             if len(month_options) == 0:
                 st.error("월 데이터가 없습니다.")
