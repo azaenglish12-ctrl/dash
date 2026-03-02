@@ -68,7 +68,7 @@ st.markdown("""
 
 # google_sheets.py import 추가
 try:
-    from google_sheets import load_data_from_sheets, get_test_data
+    from google_sheets import load_data_from_sheets, get_test_data, load_schedule_data
     GOOGLE_SHEETS_AVAILABLE = True
 except ImportError:
     GOOGLE_SHEETS_AVAILABLE = False
@@ -96,7 +96,7 @@ def load_data():
         if df is not None and not df.empty:
             df = df.rename(columns={'반코드': '반'})
             return df
-    
+
     # 테스트 데이터 (문법점수 추가)
     data = {
         '날짜': ['2025-10-16'] * 30 + ['2025-10-15'] * 30 + ['2025-10-14'] * 30,
@@ -146,12 +146,68 @@ def load_data():
     return pd.DataFrame(data)
 
 # ============================================
+# 개별진도표 → 총괄시험 자동 감지
+# ============================================
+@st.cache_data(ttl=300)
+def load_schedule():
+    """개별진도표 5분 캐시"""
+    if GOOGLE_SHEETS_AVAILABLE and not GOOGLE_SHEET_URL.endswith("YOUR_SHEET_ID/edit"):
+        return load_schedule_data(GOOGLE_SHEET_URL)
+    return None
+
+
+def _build_comp_lookup(schedule_df):
+    """개별진도표 → set((date_str, student_name)) 총괄 튜플
+    범위(RangeEnd - RangeStart + 1)가 10 이상이면 총괄로 판별"""
+    if schedule_df is None or schedule_df.empty:
+        return set()
+    result = set()
+    for _, row in schedule_df.iterrows():
+        try:
+            rs = int(float(str(row.get('RangeStart', '')).strip()))
+            re_ = int(float(str(row.get('RangeEnd', '')).strip()))
+        except (ValueError, TypeError):
+            continue
+        if re_ - rs + 1 >= 10:
+            date_raw = str(row.get('TestDate', '')).strip()
+            name = str(row.get('StudentName', '')).strip()
+            if not date_raw or not name:
+                continue
+            try:
+                date_str = pd.to_datetime(date_raw).strftime('%Y-%m-%d')
+            except Exception:
+                continue
+            result.add((date_str, name))
+    return result
+
+
+@st.cache_data(ttl=300)
+def _cached_comp_lookup():
+    """comp_lookup set 캐시"""
+    sched = load_schedule()
+    return _build_comp_lookup(sched)
+
+
+# ============================================
 # 공통 유틸리티 함수들
 # ============================================
 
-def is_hero(row):
+def _is_comprehensive(row, comp_lookup=None):
+    """총괄시험 여부 체크 — 개별진도표 자동 감지 우선, 수업일지 시험유형 폴백"""
+    if comp_lookup:
+        date_str = str(row.get('날짜', '')).strip()
+        name = str(row.get('이름', '')).strip()
+        if (date_str, name) in comp_lookup:
+            return True
+    if '시험유형' in row.index and pd.notna(row.get('시험유형')):
+        return str(row['시험유형']).strip() == '총괄'
+    return False
+
+def is_hero(row, comp_lookup=None):
     """영웅 조건: 어휘 정확히 100점 + 스펠 95점 이상 + 독해 80점 이상"""
     if row['출석'] == '결석':
+        return False
+    if _is_comprehensive(row, comp_lookup):
         return False
     if pd.isna(row['어휘점수']) or pd.isna(row['스펠점수']):
         return False
@@ -169,9 +225,11 @@ def is_hero(row):
     except (ValueError, TypeError):
         return False
 
-def is_villain(row):
+def is_villain(row, comp_lookup=None):
     """빌런 조건: 어휘<80 OR 스펠<60 OR (점수 있는 과목 중 2개 이상 미통과)"""
     if row['출석'] == '결석':
+        return False
+    if _is_comprehensive(row, comp_lookup):
         return False
     if pd.isna(row['어휘점수']) and pd.isna(row['스펠점수']) and pd.isna(row['독해점수']):
         return False
@@ -206,17 +264,19 @@ def mask_name(name):
     else:
         return name[0] + '□' * (len(name) - 2) + name[-1]
 
-def classify_student(row, excluded_students=[]):
-    """학생 상태 분류: hero, villain, normal, midterm, absent"""
+def classify_student(row, excluded_students=[], comp_lookup=None):
+    """학생 상태 분류: hero, villain, normal, comprehensive, midterm, absent"""
     if row['출석'] == '결석':
         return 'absent'
     elif pd.isna(row['어휘점수']) and pd.isna(row['스펠점수']) and pd.isna(row['독해점수']):
         return 'midterm'
+    elif _is_comprehensive(row, comp_lookup):
+        return 'comprehensive'
     elif row['이름'] in excluded_students:
         return 'normal'
-    elif is_hero(row):
+    elif is_hero(row, comp_lookup):
         return 'hero'
-    elif is_villain(row):
+    elif is_villain(row, comp_lookup):
         return 'villain'
     else:
         return 'normal'
@@ -225,7 +285,7 @@ def classify_student(row, excluded_students=[]):
 # 전광판 전용 함수들
 # ============================================
 
-def get_monthly_hero_counts(df, selected_date, excluded_students=[]):
+def get_monthly_hero_counts(df, selected_date, excluded_students=[], comp_lookup=None):
     try:
         date_obj = pd.to_datetime(selected_date)
         year_month = date_obj.strftime('%Y-%m')
@@ -236,12 +296,12 @@ def get_monthly_hero_counts(df, selected_date, excluded_students=[]):
     monthly_df = df_copy[df_copy['날짜_obj'].dt.strftime('%Y-%m') == year_month].copy()
     if excluded_students:
         monthly_df = monthly_df[~monthly_df['이름'].isin(excluded_students)]
-    monthly_df['is_hero'] = monthly_df.apply(is_hero, axis=1)
+    monthly_df['is_hero'] = monthly_df.apply(lambda r: is_hero(r, comp_lookup), axis=1)
     hero_counts = monthly_df[monthly_df['is_hero']].groupby('이름').size().reset_index(name='영웅횟수')
     hero_counts = hero_counts.sort_values('영웅횟수', ascending=False)
     return hero_counts
 
-def get_cumulative_hero_counts(df, selected_date, excluded_students=[]):
+def get_cumulative_hero_counts(df, selected_date, excluded_students=[], comp_lookup=None):
     try:
         date_obj = pd.to_datetime(selected_date)
         start_obj = pd.to_datetime(CUMULATIVE_START_DATE)
@@ -252,7 +312,7 @@ def get_cumulative_hero_counts(df, selected_date, excluded_students=[]):
     cumul_df = df_copy[(df_copy['날짜_obj'] >= start_obj) & (df_copy['날짜_obj'] <= date_obj)].copy()
     if excluded_students:
         cumul_df = cumul_df[~cumul_df['이름'].isin(excluded_students)]
-    cumul_df['is_hero'] = cumul_df.apply(is_hero, axis=1)
+    cumul_df['is_hero'] = cumul_df.apply(lambda r: is_hero(r, comp_lookup), axis=1)
     hero_counts = cumul_df[cumul_df['is_hero']].groupby('이름').size().reset_index(name='영웅횟수')
     hero_counts = hero_counts.sort_values('영웅횟수', ascending=False)
     return hero_counts
@@ -416,6 +476,40 @@ def add_normal_bars(fig, row, x_base):
             hovertemplate=f"{masked_name} - 문법: {row['문법점수']}점<extra></extra>"
         ))
 
+def add_comprehensive_bars(fig, row, x_base):
+    """총괄시험 학생 - 네온 핑크, 영웅/빌런 판정 제외, 모든 막대 핑크"""
+    masked_name = mask_name(row['이름'])
+    # 번쩍이는 효과: 초 단위로 색상 교대
+    flash = int(time.time()) % 2
+    bar_colors = ['#FF1493', '#FF00FF'] if flash else ['#FF00FF', '#FF1493']
+    border_colors = ['#00FFFF', '#39FF14'] if flash else ['#39FF14', '#00FFFF']
+
+    subjects = [
+        ('어휘점수', x_base),
+        ('스펠점수', x_base + 0.8),
+        ('독해점수', x_base + 1.6),
+        ('문법점수', x_base + 2.4)
+    ]
+    for i, (subject, x_pos) in enumerate(subjects):
+        if pd.notna(row.get(subject)):
+            score = row[subject]
+            fig.add_trace(go.Bar(
+                x=[x_pos], y=[score], width=0.7,
+                marker=dict(
+                    color=bar_colors[i % 2],
+                    line=dict(color=border_colors[i % 2], width=4)
+                ),
+                text=str(int(score)), textposition='auto',
+                textfont=dict(size=11, color='white', family='Arial Black'),
+                showlegend=False,
+                hovertemplate=f"{masked_name} - {subject[:-2]}: {score}점 (총괄)<extra></extra>"
+            ))
+    fig.add_annotation(
+        text="<b>TOTAL</b>", x=x_base + 1.2, y=108, showarrow=False,
+        font=dict(size=13, color='white', family='Arial Black'),
+        bgcolor='#FF1493', bordercolor='#00FFFF', borderwidth=3
+    )
+
 def add_midterm_section(fig, midterm_df, start_x):
     if len(midterm_df) == 0:
         return
@@ -444,12 +538,16 @@ def create_dashboard(selected_date, excluded_students=[]):
     if len(today_df) == 0:
         st.warning(f"{selected_date}에 해당하는 데이터가 없습니다.")
         return None, None
-    today_df['status'] = today_df.apply(classify_student, axis=1)
+    comp_lookup = _cached_comp_lookup()
+    today_df['status'] = today_df.apply(lambda r: classify_student(r, excluded_students, comp_lookup), axis=1)
     class_order = {'초등': 1, '중등': 2, '수능': 3, '정시': 4}
-    
+
     hero_df = today_df[today_df['status'] == 'hero'].copy()
     hero_df['class_order'] = hero_df['반'].map(class_order)
     hero_df = hero_df.sort_values(['class_order', '이름'])
+    comp_df = today_df[today_df['status'] == 'comprehensive'].copy()
+    comp_df['class_order'] = comp_df['반'].map(class_order)
+    comp_df = comp_df.sort_values(['class_order', '이름'])
     villain_df = today_df[today_df['status'] == 'villain'].copy()
     villain_df['class_order'] = villain_df['반'].map(class_order)
     villain_df = villain_df.sort_values(['class_order', '이름'])
@@ -462,42 +560,49 @@ def create_dashboard(selected_date, excluded_students=[]):
     absent_df = today_df[today_df['status'] == 'absent'].copy()
     absent_df['class_order'] = absent_df['반'].map(class_order)
     absent_df = absent_df.sort_values(['class_order', '이름'])
-    
+
     fig = go.Figure()
-    
+
     for idx, (_, row) in enumerate(hero_df.iterrows()):
         x_base = idx * STUDENT_WIDTH
         fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
             line=dict(color="#00C851", width=3), fillcolor="rgba(255,215,0,0.1)", layer="below")
         add_hero_effect(fig, row, x_base)
-    
-    normal_start = len(hero_df) * STUDENT_WIDTH + 1
+
+    comp_start = len(hero_df) * STUDENT_WIDTH + (1 if len(hero_df) > 0 else 0)
+    for idx, (_, row) in enumerate(comp_df.iterrows()):
+        x_base = comp_start + idx * STUDENT_WIDTH
+        fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+            line=dict(color="#FF1493", width=4), fillcolor="rgba(255,20,147,0.15)", layer="below")
+        add_comprehensive_bars(fig, row, x_base)
+
+    normal_start = comp_start + len(comp_df) * STUDENT_WIDTH + (1 if len(comp_df) > 0 else (1 if len(hero_df) > 0 else 0))
     for idx, (_, row) in enumerate(normal_df.iterrows()):
         x_base = normal_start + idx * STUDENT_WIDTH
         fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
             line=dict(color="rgba(100, 100, 100, 0.3)", width=2), fillcolor="rgba(0,0,0,0)", layer="below")
         add_normal_bars(fig, row, x_base)
-    
+
     villain_start = normal_start + len(normal_df) * STUDENT_WIDTH + 1
     for idx, (_, row) in enumerate(villain_df.iterrows()):
         x_base = villain_start + idx * STUDENT_WIDTH
         fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
             line=dict(color="#8e44ad", width=3), fillcolor="rgba(142,68,173,0.1)", layer="below")
         add_villain_effect(fig, row, x_base)
-    
+
     midterm_start = villain_start + len(villain_df) * STUDENT_WIDTH + 1
     add_midterm_section(fig, midterm_df, midterm_start)
-    
+
     absent_start = midterm_start + len(midterm_df) * STUDENT_WIDTH + 1
     if len(absent_df) > 0:
         fig.add_vrect(x0=absent_start - 0.5, x1=absent_start + len(absent_df) * STUDENT_WIDTH,
             fillcolor="rgba(128, 128, 128, 0.1)", layer="below", line_width=0)
-    
+
     fig.add_hline(y=94, line_dash="dash", line_color="rgba(255,0,0,0.3)",
                   annotation_text="어휘 기준 94점", annotation_position="right")
     fig.add_hline(y=80, line_dash="dash", line_color="rgba(0,0,255,0.3)",
                   annotation_text="스펠/독해 기준 80점", annotation_position="right")
-    
+
     all_names = []
     tick_positions = []
     for idx, (_, row) in enumerate(hero_df.iterrows()):
@@ -505,6 +610,11 @@ def create_dashboard(selected_date, excluded_students=[]):
         if row['출석'] == '지각': name += " ⏰"
         all_names.append(name)
         tick_positions.append(idx * STUDENT_WIDTH + 1.2)
+    for idx, (_, row) in enumerate(comp_df.iterrows()):
+        name = mask_name(row['이름'])
+        if row['출석'] == '지각': name += " ⏰"
+        all_names.append(name)
+        tick_positions.append(comp_start + idx * STUDENT_WIDTH + 1.2)
     for idx, (_, row) in enumerate(normal_df.iterrows()):
         name = mask_name(row['이름'])
         if row['출석'] == '지각': name += " ⏰"
@@ -523,7 +633,7 @@ def create_dashboard(selected_date, excluded_students=[]):
     for idx, (_, row) in enumerate(absent_df.iterrows()):
         all_names.append(mask_name(row['이름']))
         tick_positions.append(absent_start + idx * STUDENT_WIDTH + 1.2)
-    
+
     fig.update_layout(
         title=None, height=900, margin=dict(l=60, r=60, t=10, b=150),
         xaxis=dict(ticktext=all_names, tickvals=tick_positions, tickfont=dict(size=11), tickangle=0),
@@ -531,7 +641,9 @@ def create_dashboard(selected_date, excluded_students=[]):
         plot_bgcolor='white', paper_bgcolor='#f5f5f5',
         bargap=0.1, bargroupgap=0.05, showlegend=False, hovermode='x'
     )
-    
+
+    if len(comp_df) > 0:
+        fig.add_vline(x=comp_start - 0.5, line_dash="dot", line_color="#FF1493", opacity=0.7)
     if len(normal_df) > 0:
         fig.add_vline(x=normal_start - 0.5, line_dash="dot", line_color="#00C851", opacity=0.5)
     if len(villain_df) > 0:
@@ -539,15 +651,16 @@ def create_dashboard(selected_date, excluded_students=[]):
     fig.add_vline(x=midterm_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
     if len(absent_df) > 0:
         fig.add_vline(x=absent_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
-    
+
     pass_count = sum((normal_df['어휘점수'] >= 94) & (normal_df['스펠점수'] >= 90) & (normal_df['독해점수'] >= 80))
     late_count = len(today_df[today_df['출석'] == '지각'])
     excluded_count = len(excluded_students)
     excluded_text = f" | <span style='color: gray'>제외: {excluded_count}명</span>" if excluded_count > 0 else ""
+    comp_text = f" | <span style='color: #FF1493; font-weight:900; text-shadow: 0 0 8px #FF1493, 0 0 16px #FF00FF;'>TOTAL: {len(comp_df)}명</span>" if len(comp_df) > 0 else ""
     summary_text = f"""
     <div style='text-align: center; padding: 10px; background: white; border-radius: 5px;'>
-    <b>영웅: {len(hero_df)}명 | 빌런: {len(villain_df)}명 | 정상응시: {len(normal_df)}명 | 내신: {len(midterm_df)}명 | 결석: {len(absent_df)}명 | 지각: {late_count}명 ⏰{excluded_text}</b><br>
-    <span style='color: green'>통과: {pass_count}명</span> | 
+    <b>영웅: {len(hero_df)}명 | 빌런: {len(villain_df)}명 | 정상응시: {len(normal_df)}명{comp_text} | 내신: {len(midterm_df)}명 | 결석: {len(absent_df)}명 | 지각: {late_count}명 ⏰{excluded_text}</b><br>
+    <span style='color: green'>통과: {pass_count}명</span> |
     <span style='color: red'>재시험: {len(normal_df) - pass_count}명</span> |
     <span style='color: #3498db'>문법: 커트없음</span>
     </div>
@@ -560,26 +673,28 @@ def create_dashboard(selected_date, excluded_students=[]):
 # ============================================
 def create_student_dashboard(student_df, student_name):
     """개인 리포트용 대시보드 - 전광판과 동일한 디자인, 날짜 시계열 순서"""
-    
+
     student_df = student_df.copy().sort_values('날짜').reset_index(drop=True)
-    student_df['status'] = student_df.apply(classify_student, axis=1)
-    
+    comp_lookup = _cached_comp_lookup()
+    student_df['status'] = student_df.apply(lambda r: classify_student(r, [], comp_lookup), axis=1)
+
     fig = go.Figure()
-    
+
     all_labels = []
     tick_positions = []
-    
+
     hero_count = 0
     villain_count = 0
     normal_count = 0
+    comp_count = 0
     midterm_count = 0
     absent_count = 0
     late_count = 0
-    
+
     for idx, (_, row) in enumerate(student_df.iterrows()):
         x_base = idx * STUDENT_WIDTH
         status = row['status']
-        
+
         # 날짜 라벨
         try:
             d = pd.to_datetime(row['날짜'])
@@ -589,15 +704,20 @@ def create_student_dashboard(student_df, student_name):
         if row['출석'] == '지각':
             label += " ⏰"
             late_count += 1
-        
+
         all_labels.append(label)
         tick_positions.append(x_base + 1.2)
-        
+
         if status == 'hero':
             fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
                 line=dict(color="#00C851", width=3), fillcolor="rgba(255,215,0,0.1)", layer="below")
             add_hero_effect(fig, row, x_base)
             hero_count += 1
+        elif status == 'comprehensive':
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+                line=dict(color="#FF1493", width=4), fillcolor="rgba(255,20,147,0.15)", layer="below")
+            add_comprehensive_bars(fig, row, x_base)
+            comp_count += 1
         elif status == 'villain':
             fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
                 line=dict(color="#8e44ad", width=3), fillcolor="rgba(142,68,173,0.1)", layer="below")
@@ -622,13 +742,13 @@ def create_student_dashboard(student_df, student_name):
                 line=dict(color="rgba(100, 100, 100, 0.3)", width=2), fillcolor="rgba(0,0,0,0)", layer="below")
             add_normal_bars(fig, row, x_base)
             normal_count += 1
-    
+
     # 기준선
     fig.add_hline(y=94, line_dash="dash", line_color="rgba(255,0,0,0.3)",
                   annotation_text="어휘 기준 94점", annotation_position="right")
     fig.add_hline(y=80, line_dash="dash", line_color="rgba(0,0,255,0.3)",
                   annotation_text="스펠/독해 기준 80점", annotation_position="right")
-    
+
     fig.update_layout(
         title=None, height=900,
         margin=dict(l=60, r=60, t=10, b=150),
@@ -640,13 +760,14 @@ def create_student_dashboard(student_df, student_name):
         bargap=0.1, bargroupgap=0.05,
         showlegend=False, hovermode='x'
     )
-    
+
+    comp_text = f" | <span style='color: #FF1493; font-weight:900; text-shadow: 0 0 8px #FF1493, 0 0 16px #FF00FF;'>TOTAL: {comp_count}일</span>" if comp_count > 0 else ""
     summary_text = f"""
     <div style='text-align: center; padding: 10px; background: white; border-radius: 5px;'>
-    <b>영웅: {hero_count}일 | 빌런: {villain_count}일 | 정상응시: {normal_count}일 | 내신: {midterm_count}일 | 결석: {absent_count}일 | 지각: {late_count}일 ⏰</b>
+    <b>영웅: {hero_count}일 | 빌런: {villain_count}일 | 정상응시: {normal_count}일{comp_text} | 내신: {midterm_count}일 | 결석: {absent_count}일 | 지각: {late_count}일 ⏰</b>
     </div>
     """
-    
+
     return fig, summary_text
 
 
@@ -654,15 +775,17 @@ def page_student_report():
     """개인 리포트 탭"""
     try:
         df = load_data()
-        
+
         if df is None or len(df) == 0:
             st.error("데이터를 불러올 수 없습니다.")
             return
-        
+
         # 컬럼 확인 및 없는 컬럼 기본값 추가
         for col in ['어휘점수', '스펠점수', '독해점수', '문법점수']:
             if col not in df.columns:
                 df[col] = None
+        if '시험유형' not in df.columns:
+            df['시험유형'] = ''
         if '반' not in df.columns:
             if '반코드' in df.columns:
                 df = df.rename(columns={'반코드': '반'})
@@ -670,19 +793,19 @@ def page_student_report():
                 df['반'] = '미지정'
         if '출석' not in df.columns:
             df['출석'] = '출석'
-        
+
         # 점수 컬럼 숫자 변환
         for col in ['어휘점수', '스펠점수', '독해점수', '문법점수']:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
-        
+
         df['날짜'] = df['날짜'].astype(str).str.strip()
         df = df[(df['날짜'] != 'nan') & (df['날짜'] != '') & (df['날짜'] != 'None')]
-        
+
         if len(df) == 0:
             st.error("유효한 날짜 데이터가 없습니다.")
             return
-        
+
         # 날짜 변환
         df['날짜_obj'] = pd.to_datetime(df['날짜'], errors='coerce', format='mixed')
         if df['날짜_obj'].isna().all():
@@ -693,39 +816,39 @@ def page_student_report():
                         break
                 except:
                     continue
-        
+
         valid_mask = df['날짜_obj'].notna()
         df.loc[valid_mask, '날짜'] = df.loc[valid_mask, '날짜_obj'].dt.strftime('%Y-%m-%d')
         df = df[valid_mask].copy()
-        
+
         if len(df) == 0:
             st.error("날짜를 파싱할 수 없습니다.")
             return
-        
+
         all_students = sorted(df['이름'].unique().tolist())
         if len(all_students) == 0:
             st.error("학생 데이터가 없습니다.")
             return
-        
+
         student_classes = df.drop_duplicates('이름').set_index('이름')['반'].to_dict()
 
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             selected_student = st.selectbox("학생 선택", all_students, index=0)
-        
+
         # 해당 학생의 데이터 날짜 범위 확인
         student_all = df[df['이름'] == selected_student].copy()
         if len(student_all) == 0:
             st.warning("해당 학생의 데이터가 없습니다.")
             return
-        
+
         min_date = student_all['날짜_obj'].min().date()
         max_date = student_all['날짜_obj'].max().date()
         today = datetime.now().date()
-        
+
         # 월 목록 (프리셋용)
         months = sorted(student_all['날짜_obj'].dropna().dt.to_period('M').unique(), reverse=True)
-        
+
         # 기간 선택 옵션 - "1월~현재"를 맨 앞(기본값)으로
         period_options = ["1월~현재"]
         for m in months:
@@ -735,10 +858,10 @@ def page_student_report():
         period_options.append("최근 6개월")
         period_options.append("전체")
         period_options.append("직접 선택")
-        
+
         with col2:
             selected_period = st.selectbox("기간", period_options, index=0)
-        
+
         # 기간에 따라 시작/종료 날짜 결정
         if selected_period == "1월~현재":
             start_date = pd.Timestamp("2026-01-01")
@@ -781,7 +904,7 @@ def page_student_report():
 
         # 필터링
         student_df = student_all[
-            (student_all['날짜_obj'] >= start_date) & 
+            (student_all['날짜_obj'] >= start_date) &
             (student_all['날짜_obj'] <= end_date)
         ].copy()
         student_df = student_df.sort_values('날짜').reset_index(drop=True)
@@ -795,7 +918,8 @@ def page_student_report():
         absent_days = int((student_df['출석'] == '결석').sum())
         late_days = int((student_df['출석'] == '지각').sum())
         attend_days = total_days - absent_days
-        student_df['is_hero'] = student_df.apply(is_hero, axis=1)
+        comp_lookup = _cached_comp_lookup()
+        student_df['is_hero'] = student_df.apply(lambda r: is_hero(r, comp_lookup), axis=1)
         hero_days = int(student_df['is_hero'].sum())
         hero_pct = (hero_days / attend_days * 100) if attend_days > 0 else 0
 
@@ -806,24 +930,25 @@ def page_student_report():
             f"(영웅 {hero_days}회/{attend_days}일 = {hero_pct:.0f}%)</h1>",
             unsafe_allow_html=True
         )
-        
+
         # ★ 전광판과 동일한 차트 생성
         fig, summary = create_student_dashboard(student_df, selected_student)
-        
+
         if fig is not None:
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.markdown(summary, unsafe_allow_html=True)
-        
+
         st.markdown("""
         <div style='text-align: center; padding: 10px; margin-top: 10px; background: #f0f0f0; border-radius: 5px;'>
-        <b>막대 색상:</b> 
-        <span style='color: #00C851;'>■ 통과</span> | 
-        <span style='color: #FF4444;'>■ 미통과</span> | 
+        <b>막대 색상:</b>
+        <span style='color: #00C851;'>■ 통과</span> |
+        <span style='color: #FF4444;'>■ 미통과</span> |
         <span style='color: #3498db;'>■ 문법 (커트없음)</span> |
-        <b>X축 = 날짜순 (금테=영웅 / 보라테=빌런 / 회색=정상)</b>
+        <span style='color: #FF1493; text-shadow: 0 0 6px #FF1493;'>■ 총괄</span> |
+        <b>X축 = 날짜순 (금테=영웅 / 보라테=빌런 / <span style='color:#FF1493;'>핑크테=총괄</span> / 회색=정상)</b>
         </div>
         """, unsafe_allow_html=True)
-    
+
     except Exception as e:
         st.error(f"개인 리포트 로드 중 오류 발생: {e}")
         import traceback
@@ -903,8 +1028,9 @@ def page_scoreboard():
     try: cumul_start_display = pd.to_datetime(CUMULATIVE_START_DATE).strftime('%Y.%m')
     except: cumul_start_display = "2024.11"
 
-    monthly_hero = get_monthly_hero_counts(df, selected_date_str, excluded_students)
-    cumul_hero = get_cumulative_hero_counts(df, selected_date_str, excluded_students)
+    comp_lookup = _cached_comp_lookup()
+    monthly_hero = get_monthly_hero_counts(df, selected_date_str, excluded_students, comp_lookup)
+    cumul_hero = get_cumulative_hero_counts(df, selected_date_str, excluded_students, comp_lookup)
     monthly_html = render_hero_inline(monthly_hero, f"{selected_month_str} 영웅", top_n=5)
     cumul_html = render_hero_inline(cumul_hero, f"누적({cumul_start_display}~)", top_n=5)
 
@@ -933,10 +1059,11 @@ def page_scoreboard():
     with legend_area:
         st.markdown("""
         <div style='text-align: center; padding: 10px; margin-top: 10px; background: #f0f0f0; border-radius: 5px;'>
-        <b>막대 색상:</b> 
-        <span style='color: #00C851;'>■ 통과</span> | 
-        <span style='color: #FF4444;'>■ 미통과</span> | 
-        <span style='color: #3498db;'>■ 문법 (커트없음)</span>
+        <b>막대 색상:</b>
+        <span style='color: #00C851;'>■ 통과</span> |
+        <span style='color: #FF4444;'>■ 미통과</span> |
+        <span style='color: #3498db;'>■ 문법 (커트없음)</span> |
+        <span style='color: #FF1493; text-shadow: 0 0 6px #FF1493;'>■ 총괄 (판정제외)</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -947,8 +1074,8 @@ def page_scoreboard():
             if excluded_students:
                 st.warning(f"다음 학생들이 제외되었습니다: {', '.join(excluded_students)}")
                 today_df = today_df[~today_df['이름'].isin(excluded_students)]
-            today_df['is_hero'] = today_df.apply(is_hero, axis=1)
-            today_df['is_villain'] = today_df.apply(is_villain, axis=1)
+            today_df['is_hero'] = today_df.apply(lambda r: is_hero(r, comp_lookup), axis=1)
+            today_df['is_villain'] = today_df.apply(lambda r: is_villain(r, comp_lookup), axis=1)
 
             st.markdown("### 전체 학생 영웅 판정 현황")
             all_students = today_df[(today_df['출석'] != '결석') & (pd.notna(today_df['어휘점수'])) & (pd.notna(today_df['스펠점수']))].copy()
@@ -1021,7 +1148,7 @@ def page_scoreboard():
 def main():
     page = st.radio("", ["전광판", "개인 리포트"], horizontal=True, label_visibility="collapsed")
     st.markdown("<hr style='margin:0 0 5px 0;padding:0;border-color:#eee;'>", unsafe_allow_html=True)
-    
+
     if page == "전광판":
         page_scoreboard()
     else:

@@ -36,50 +36,50 @@ def init_google_sheets():
             except FileNotFoundError:
                 st.error("credentials.json 파일을 찾을 수 없습니다!")
                 return None
-                
+
     except Exception as e:
         st.error(f"구글시트 연결 실패: {e}")
         st.info("Secrets 설정을 확인하세요.")
         return None
 
-@st.cache_data(ttl=10)  # 10초마다 캐시 갱신 
+@st.cache_data(ttl=10)  # 10초마다 캐시 갱신
 def load_data_from_sheets(sheet_url, worksheet_name="시트1"):
     """구글시트에서 데이터 로드"""
     try:
         client = init_google_sheets()
         if not client:
             return None
-        
+
         # URL에서 시트 열기
         sheet = client.open_by_url(sheet_url)
-        
+
         # 워크시트 선택
         worksheet = sheet.worksheet(worksheet_name)
-        
+
         # 모든 데이터 가져오기
         data = worksheet.get_all_records()
-        
+
         # DataFrame으로 변환
         df = pd.DataFrame(data)
-        
+
         # 빈 문자열을 None으로 변환
         df = df.replace('', None)
-        
+
         # 숫자 컬럼 변환
-        numeric_columns = ['어휘점수', '스펠점수', '독해점수']
+        numeric_columns = ['어휘점수', '스펠점수', '독해점수', '문법점수']
         for col in numeric_columns:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
-        
+
         # 날짜 형식 통일 (필요시)
         if '날짜' in df.columns:
             # 빈 문자열과 NaN 제거
             df = df[df['날짜'].notna()]
             df = df[df['날짜'] != '']
-            
+
             # 날짜를 문자열로 변환 (YYYY-MM-DD 형식 유지)
             df['날짜'] = df['날짜'].astype(str).str.strip()
-            
+
             # 엑셀 날짜 숫자 처리 (44000 같은 숫자를 날짜로 변환)
             try:
                 # 숫자로 된 날짜가 있는지 확인
@@ -90,12 +90,30 @@ def load_data_from_sheets(sheet_url, worksheet_name="시트1"):
                     df['날짜'] = pd.to_datetime(df['날짜']).dt.strftime('%Y-%m-%d')
             except:
                 pass
-        
+
         return df
-        
+
     except Exception as e:
         st.error(f"데이터 로드 실패: {e}")
         st.info("시트 URL과 시트명을 확인하세요.")
+        return None
+
+@st.cache_data(ttl=300)
+def load_schedule_data(sheet_url):
+    """개별진도표 탭 로드 → DataFrame 반환 (총괄시험 감지용)"""
+    try:
+        client = init_google_sheets()
+        if not client:
+            return None
+        sheet = client.open_by_url(sheet_url)
+        worksheet = sheet.worksheet("개별진도표")
+        raw = worksheet.get_all_values()
+        if len(raw) < 2:
+            return None
+        headers, rows = raw[0], raw[1:]
+        df = pd.DataFrame(rows, columns=headers)
+        return df
+    except Exception:
         return None
 
 def get_test_data():
