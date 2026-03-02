@@ -125,63 +125,66 @@ def load_data():
 # 영웅 판정 함수
 def is_hero(row):
     """영웅 조건: 어휘 정확히 100점 + 스펠 95점 이상 + 독해 80점 이상"""
-    if row['출석'] == '결석':
-        return False
-    
-    if pd.isna(row['어휘점수']) or pd.isna(row['스펠점수']):
-        return False
-    
     try:
+        if row['출석'] == '결석':
+            return False
+
+        if pd.isna(row['어휘점수']) or pd.isna(row['스펠점수']):
+            return False
+
         vocab_score = float(str(row['어휘점수']).strip())
         spell_score = float(str(row['스펠점수']).strip())
-        
+
         is_vocab_100 = vocab_score >= 99.9 and vocab_score <= 100.1
         is_spell_95_plus = spell_score >= 94.9
-        
+
         if pd.notna(row['독해점수']):
             reading_score = float(str(row['독해점수']).strip())
             is_reading_pass = reading_score >= 79.9
             return is_vocab_100 and is_spell_95_plus and is_reading_pass
         else:
             return is_vocab_100 and is_spell_95_plus
-            
-    except (ValueError, TypeError):
+
+    except (KeyError, TypeError, ValueError):
         return False
 
 # 빌런 판정 함수
 def is_villain(row):
     """빌런 조건: 어휘<80 OR 스펠<60 OR (점수 있는 과목 중 2개 이상 미통과)"""
-    if row['출석'] == '결석':
+    try:
+        if row['출석'] == '결석':
+            return False
+
+        if pd.isna(row['어휘점수']) and pd.isna(row['스펠점수']) and pd.isna(row['독해점수']):
+            return False
+
+        if pd.notna(row['어휘점수']) and row['어휘점수'] < 80:
+            return True
+
+        if pd.notna(row['스펠점수']) and row['스펠점수'] < 60:
+            return True
+
+        total_subjects = 0
+        fail_count = 0
+
+        if pd.notna(row['어휘점수']):
+            total_subjects += 1
+            if row['어휘점수'] < 94:
+                fail_count += 1
+
+        if pd.notna(row['스펠점수']):
+            total_subjects += 1
+            if row['스펠점수'] < 90:
+                fail_count += 1
+
+        if pd.notna(row['독해점수']):
+            total_subjects += 1
+            if row['독해점수'] < 80:
+                fail_count += 1
+
+        return fail_count >= 2
+    except (KeyError, TypeError, ValueError):
         return False
-    
-    if pd.isna(row['어휘점수']) and pd.isna(row['스펠점수']) and pd.isna(row['독해점수']):
-        return False
-    
-    if pd.notna(row['어휘점수']) and row['어휘점수'] < 80:
-        return True
-    
-    if pd.notna(row['스펠점수']) and row['스펠점수'] < 60:
-        return True
-    
-    total_subjects = 0
-    fail_count = 0
-    
-    if pd.notna(row['어휘점수']):
-        total_subjects += 1
-        if row['어휘점수'] < 94:
-            fail_count += 1
-    
-    if pd.notna(row['스펠점수']):
-        total_subjects += 1
-        if row['스펠점수'] < 90:
-            fail_count += 1
-    
-    if pd.notna(row['독해점수']):
-        total_subjects += 1
-        if row['독해점수'] < 80:
-            fail_count += 1
-    
-    return fail_count >= 2
 
 # 월별 칭호 집계 함수
 def get_monthly_badges(df, selected_date, excluded_students=[]):
@@ -198,14 +201,23 @@ def get_monthly_badges(df, selected_date, excluded_students=[]):
     if excluded_students:
         monthly_df = monthly_df[~monthly_df['이름'].isin(excluded_students)]
     
+    if monthly_df.empty:
+        return pd.DataFrame(columns=['이름', '영웅횟수']), pd.DataFrame(columns=['이름', '빌런횟수'])
+
     monthly_df['is_hero'] = monthly_df.apply(is_hero, axis=1)
-    hero_counts = monthly_df[monthly_df['is_hero']].groupby('이름').size().reset_index(name='영웅횟수')
-    hero_counts = hero_counts.sort_values('영웅횟수', ascending=False)
-    
+    if 'is_hero' not in monthly_df.columns:
+        hero_counts = pd.DataFrame(columns=['이름', '영웅횟수'])
+    else:
+        hero_counts = monthly_df[monthly_df['is_hero']].groupby('이름').size().reset_index(name='영웅횟수')
+        hero_counts = hero_counts.sort_values('영웅횟수', ascending=False)
+
     monthly_df['is_villain'] = monthly_df.apply(is_villain, axis=1)
-    villain_counts = monthly_df[monthly_df['is_villain']].groupby('이름').size().reset_index(name='빌런횟수')
-    villain_counts = villain_counts.sort_values('빌런횟수', ascending=False)
-    
+    if 'is_villain' not in monthly_df.columns:
+        villain_counts = pd.DataFrame(columns=['이름', '빌런횟수'])
+    else:
+        villain_counts = monthly_df[monthly_df['is_villain']].groupby('이름').size().reset_index(name='빌런횟수')
+        villain_counts = villain_counts.sort_values('빌런횟수', ascending=False)
+
     return hero_counts, villain_counts
 
 # 이름 마스킹 함수
@@ -223,17 +235,20 @@ def mask_name(name):
 # 학생 상태 분류 함수
 def classify_student(row, excluded_students=[]):
     """학생 상태 분류: hero, villain, normal, midterm, absent"""
-    if row['출석'] == '결석':
-        return 'absent'
-    elif pd.isna(row['어휘점수']) and pd.isna(row['스펠점수']) and pd.isna(row['독해점수']):
-        return 'midterm'
-    elif row['이름'] in excluded_students:
-        return 'normal'
-    elif is_hero(row):
-        return 'hero'
-    elif is_villain(row):
-        return 'villain'
-    else:
+    try:
+        if row['출석'] == '결석':
+            return 'absent'
+        elif pd.isna(row['어휘점수']) and pd.isna(row['스펠점수']) and pd.isna(row['독해점수']):
+            return 'midterm'
+        elif row['이름'] in excluded_students:
+            return 'normal'
+        elif is_hero(row):
+            return 'hero'
+        elif is_villain(row):
+            return 'villain'
+        else:
+            return 'normal'
+    except (KeyError, TypeError, ValueError):
         return 'normal'
 
 # 영웅 효과 추가 함수
@@ -775,12 +790,16 @@ def main():
             st.warning(f"다음 학생들이 제외되었습니다: {', '.join(excluded_students)}")
             today_df = today_df[~today_df['이름'].isin(excluded_students)]
         
-        today_df['is_hero'] = today_df.apply(is_hero, axis=1)
-        today_df['is_villain'] = today_df.apply(is_villain, axis=1)
-        
+        try:
+            today_df['is_hero'] = today_df.apply(is_hero, axis=1)
+            today_df['is_villain'] = today_df.apply(is_villain, axis=1)
+        except Exception:
+            today_df['is_hero'] = False
+            today_df['is_villain'] = False
+
         st.markdown("### 전체 학생 영웅 판정 현황")
-        all_students = today_df[(today_df['출석'] != '결석') & 
-                                (pd.notna(today_df['어휘점수'])) & 
+        all_students = today_df[(today_df['출석'] != '결석') &
+                                (pd.notna(today_df['어휘점수'])) &
                                 (pd.notna(today_df['스펠점수']))].copy()
         
         if len(all_students) > 0:
