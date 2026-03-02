@@ -54,12 +54,14 @@ try:
 except ImportError:
     GOOGLE_SHEETS_AVAILABLE = False
 
-# 구글시트 URL 설정
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1qW6Cs4FaSp-kEsSDFAyUw0hWzaTVBsSn9WeU8ZW_vd4/edit?gid=368136260#gid=368136260"
-SHEET_NAME = "성적데이터"
+# ============================================
+# ★★★ master26 시트 URL을 여기에 붙여넣으세요 ★★★
+# ============================================
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1DCpUkyWxD2qm_oH4ckr9OzvpKTvXqzZ7lPAHbt9QWmE/edit"
+SHEET_NAME = "수업일지"
 
 # 학생 간격 설정 (4개 막대로 변경)
-STUDENT_WIDTH = 3.3  # 기존 2.5에서 3.3으로 증가
+STUDENT_WIDTH = 3.3
 
 # 데이터 로드 함수
 @st.cache_data(ttl=10)
@@ -68,6 +70,8 @@ def load_data():
     if GOOGLE_SHEETS_AVAILABLE and not GOOGLE_SHEET_URL.endswith("YOUR_SHEET_ID/edit"):
         df = load_data_from_sheets(GOOGLE_SHEET_URL, SHEET_NAME)
         if df is not None and not df.empty:
+            # ★ master26 컬럼명 매핑 (반코드 -> 반)
+            df = df.rename(columns={'반코드': '반'})
             return df
     
     # 테스트 데이터 (문법점수 추가)
@@ -121,24 +125,19 @@ def load_data():
 # 영웅 판정 함수
 def is_hero(row):
     """영웅 조건: 어휘 정확히 100점 + 스펠 95점 이상 + 독해 80점 이상"""
-    # 결석한 학생만 제외 (출석, 지각 모두 포함)
     if row['출석'] == '결석':
         return False
     
-    # 점수가 없으면 영웅 아님
     if pd.isna(row['어휘점수']) or pd.isna(row['스펠점수']):
         return False
     
     try:
-        # 어휘 정확히 100점 AND 스펠 95점 이상
         vocab_score = float(str(row['어휘점수']).strip())
         spell_score = float(str(row['스펠점수']).strip())
         
-        # 소수점 오차 고려
         is_vocab_100 = vocab_score >= 99.9 and vocab_score <= 100.1
         is_spell_95_plus = spell_score >= 94.9
         
-        # 독해 점수가 있는 경우, 80점 이상이어야 함
         if pd.notna(row['독해점수']):
             reading_score = float(str(row['독해점수']).strip())
             is_reading_pass = reading_score >= 79.9
@@ -152,45 +151,35 @@ def is_hero(row):
 # 빌런 판정 함수
 def is_villain(row):
     """빌런 조건: 어휘<80 OR 스펠<60 OR (점수 있는 과목 중 2개 이상 미통과)"""
-    # 결석한 학생만 제외 (출석, 지각 모두 포함)
     if row['출석'] == '결석':
         return False
     
-    # 점수가 하나도 없으면 내신으로 분류 (빌런 아님)
     if pd.isna(row['어휘점수']) and pd.isna(row['스펠점수']) and pd.isna(row['독해점수']):
         return False
     
-    # 즉시 빌런 조건 1: 어휘 < 80점
     if pd.notna(row['어휘점수']) and row['어휘점수'] < 80:
         return True
     
-    # 즉시 빌런 조건 2: 스펠 < 60점
     if pd.notna(row['스펠점수']) and row['스펠점수'] < 60:
         return True
     
-    # 조건 3: 점수가 있는 과목 중 2개 이상 미통과
     total_subjects = 0
     fail_count = 0
     
-    # 어휘 체크 (기준: 94점)
     if pd.notna(row['어휘점수']):
         total_subjects += 1
         if row['어휘점수'] < 94:
             fail_count += 1
     
-    # 스펠 체크 (기준: 90점)
     if pd.notna(row['스펠점수']):
         total_subjects += 1
         if row['스펠점수'] < 90:
             fail_count += 1
     
-    # 독해 체크 (기준: 80점)
     if pd.notna(row['독해점수']):
         total_subjects += 1
         if row['독해점수'] < 80:
             fail_count += 1
-    
-    # 문법은 커트가 없으므로 빌런 판정에서 제외
     
     return fail_count >= 2
 
@@ -221,7 +210,7 @@ def get_monthly_badges(df, selected_date, excluded_students=[]):
 
 # 이름 마스킹 함수
 def mask_name(name):
-    """이름의 중간 글자를 □로 마스킹"""
+    """이름의 중간 글자를 마스킹"""
     if len(name) <= 1:
         return name
     elif len(name) == 2:
@@ -255,7 +244,6 @@ def add_hero_effect(fig, row, x_base):
     vocab_score = float(row['어휘점수'])
     spell_score = float(row['스펠점수'])
     
-    # 어휘 막대
     fig.add_trace(go.Bar(
         x=[x_base],
         y=[vocab_score],
@@ -271,7 +259,6 @@ def add_hero_effect(fig, row, x_base):
         hovertemplate=f"{masked_name} - 어휘: {vocab_score}점<extra></extra>"
     ))
     
-    # 스펠 막대
     fig.add_trace(go.Bar(
         x=[x_base + 0.8],
         y=[spell_score],
@@ -287,7 +274,6 @@ def add_hero_effect(fig, row, x_base):
         hovertemplate=f"{masked_name} - 스펠: {spell_score}점<extra></extra>"
     ))
     
-    # "영웅" 텍스트
     fig.add_annotation(
         text="<b>영웅</b>",
         x=x_base + 1.2,
@@ -299,7 +285,6 @@ def add_hero_effect(fig, row, x_base):
         borderwidth=3
     )
     
-    # 독해 점수
     if pd.notna(row['독해점수']):
         color = '#00C851' if row['독해점수'] >= 80 else '#FF4444'
         fig.add_trace(go.Bar(
@@ -317,14 +302,13 @@ def add_hero_effect(fig, row, x_base):
             hovertemplate=f"{masked_name} - 독해: {row['독해점수']}점<extra></extra>"
         ))
     
-    # 문법 점수 (커트 없이 파란색으로 표시)
     if pd.notna(row.get('문법점수')):
         fig.add_trace(go.Bar(
             x=[x_base + 2.4],
             y=[row['문법점수']],
             width=0.7,
             marker=dict(
-                color='#3498db',  # 파란색 (커트 없음)
+                color='#3498db',
                 line=dict(color='gold', width=3)
             ),
             text=str(int(row['문법점수'])),
@@ -339,7 +323,6 @@ def add_villain_effect(fig, row, x_base):
     """빌런 효과"""
     masked_name = mask_name(row['이름'])
     
-    # 어휘, 스펠, 독해 (커트 있음)
     subjects_with_cut = [
         ('어휘점수', 94, x_base),
         ('스펠점수', 90, x_base + 0.8),
@@ -366,7 +349,6 @@ def add_villain_effect(fig, row, x_base):
                 hovertemplate=f"{masked_name} - {subject[:-2]}: {score}점<extra></extra>"
             ))
     
-    # 문법 점수 (커트 없이 파란색)
     if pd.notna(row.get('문법점수')):
         fig.add_trace(go.Bar(
             x=[x_base + 2.4],
@@ -383,7 +365,6 @@ def add_villain_effect(fig, row, x_base):
             hovertemplate=f"{masked_name} - 문법: {row['문법점수']}점<extra></extra>"
         ))
     
-    # "빌런" 텍스트
     fig.add_annotation(
         text="<b>빌런</b>",
         x=x_base + 1.2,
@@ -400,7 +381,6 @@ def add_normal_bars(fig, row, x_base):
     """일반 학생 막대 추가"""
     masked_name = mask_name(row['이름'])
     
-    # 어휘, 스펠, 독해 (커트 있음)
     subjects_with_cut = [
         ('어휘점수', 94, x_base),
         ('스펠점수', 90, x_base + 0.8),
@@ -424,7 +404,6 @@ def add_normal_bars(fig, row, x_base):
                 hovertemplate=f"{masked_name} - {subject[:-2]}: {score}점<extra></extra>"
             ))
     
-    # 문법 점수 (커트 없이 파란색)
     if pd.notna(row.get('문법점수')):
         fig.add_trace(go.Bar(
             x=[x_base + 2.4],
@@ -456,7 +435,6 @@ def add_midterm_section(fig, midterm_df, start_x):
         x_pos = start_x + idx * STUDENT_WIDTH
         masked_name = mask_name(row['이름'])
         
-        # 4개 막대로 변경
         for i in range(4):
             fig.add_trace(go.Bar(
                 x=[x_pos + i * 0.8],
@@ -489,7 +467,8 @@ def create_dashboard(selected_date, excluded_students=[]):
     
     today_df['status'] = today_df.apply(classify_student, axis=1)
     
-    class_order = {'초등': 1, '중등': 2, '수능': 3}
+    # ★ 정시반 추가
+    class_order = {'초등': 1, '중등': 2, '수능': 3, '정시': 4}
     
     hero_df = today_df[today_df['status'] == 'hero'].copy()
     hero_df['class_order'] = hero_df['반'].map(class_order)
@@ -519,7 +498,7 @@ def create_dashboard(selected_date, excluded_students=[]):
         fig.add_shape(
             type="rect",
             x0=x_base - 0.4, 
-            x1=x_base + 2.8,  # 4개 막대 커버
+            x1=x_base + 2.8,
             y0=0, 
             y1=105,
             line=dict(color="#00C851", width=3),
@@ -585,15 +564,13 @@ def create_dashboard(selected_date, excluded_students=[]):
     all_names = []
     tick_positions = []
     
-    # 영웅
     for idx, (_, row) in enumerate(hero_df.iterrows()):
         name = mask_name(row['이름'])
         if row['출석'] == '지각':
             name += " ⏰"
         all_names.append(name)
-        tick_positions.append(idx * STUDENT_WIDTH + 1.2)  # 중앙 위치 조정
+        tick_positions.append(idx * STUDENT_WIDTH + 1.2)
     
-    # 정상
     for idx, (_, row) in enumerate(normal_df.iterrows()):
         name = mask_name(row['이름'])
         if row['출석'] == '지각':
@@ -601,7 +578,6 @@ def create_dashboard(selected_date, excluded_students=[]):
         all_names.append(name)
         tick_positions.append(normal_start + idx * STUDENT_WIDTH + 1.2)
     
-    # 빌런
     for idx, (_, row) in enumerate(villain_df.iterrows()):
         name = mask_name(row['이름'])
         if row['출석'] == '지각':
@@ -609,7 +585,6 @@ def create_dashboard(selected_date, excluded_students=[]):
         all_names.append(name)
         tick_positions.append(villain_start + idx * STUDENT_WIDTH + 1.2)
     
-    # 내신
     for idx, (_, row) in enumerate(midterm_df.iterrows()):
         name = mask_name(row['이름'])
         if row['출석'] == '지각':
@@ -617,7 +592,6 @@ def create_dashboard(selected_date, excluded_students=[]):
         all_names.append(name)
         tick_positions.append(midterm_start + idx * STUDENT_WIDTH + 1.2)
     
-    # 결석
     for idx, (_, row) in enumerate(absent_df.iterrows()):
         all_names.append(mask_name(row['이름']))
         tick_positions.append(absent_start + idx * STUDENT_WIDTH + 1.2)
@@ -660,7 +634,6 @@ def create_dashboard(selected_date, excluded_students=[]):
     if len(absent_df) > 0:
         fig.add_vline(x=absent_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
     
-    # 통과자 수 계산
     pass_count = sum((normal_df['어휘점수'] >= 94) & (normal_df['스펠점수'] >= 90) & (normal_df['독해점수'] >= 80))
     
     late_count = len(today_df[today_df['출석'] == '지각'])
@@ -784,7 +757,6 @@ def main():
         if excluded_students:
             st.info(f"제외된 학생: {', '.join(excluded_students)}")
     
-    # 범례 추가
     st.markdown("""
     <div style='text-align: center; padding: 10px; margin-top: 10px; background: #f0f0f0; border-radius: 5px;'>
     <b>막대 색상:</b> 
