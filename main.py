@@ -1128,7 +1128,16 @@ def page_scoreboard():
         return
 
     with title_area:
-        st.markdown(f"<h1 style='margin:0 0 5px 0;font-size:20px;'>{selected_date_str} | 아자영어 통과현황 (커트 : 뜻 94, 문맥 90, 독해 80, 문법 80)</h1>", unsafe_allow_html=True)
+        schedule_df = load_schedule()
+        student_levels = get_student_vocab_levels(schedule_df, today_students)
+        legend_html = render_vocab_legend(student_levels) if student_levels else ""
+        st.markdown(
+            f"<div style='display:flex;align-items:center;justify-content:space-between;margin:0 0 5px 0;'>"
+            f"<h1 style='margin:0;font-size:20px;white-space:nowrap;'>{selected_date_str} | 아자영어 통과현황 (커트 : 뜻 94, 문맥 90, 독해 80, 문법 80)</h1>"
+            f"<div style='flex-shrink:0;'>{legend_html}</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
 
     try: selected_month_str = pd.to_datetime(selected_date_str).strftime('%m월')
     except: selected_month_str = "이번달"
@@ -1152,19 +1161,13 @@ def page_scoreboard():
         components.html(f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>{full_hero_html}</body></html>", height=110, scrolling=False)
 
     with vocab_level_area:
-        schedule_df = load_schedule()
-        student_levels = get_student_vocab_levels(schedule_df, today_students)
         if student_levels:
-            legend_html = render_vocab_legend(student_levels)
             vocab_html = render_vocab_level_bar(student_levels)
             components.html(
                 f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>"
-                f"<div style='padding:4px 10px;background:#fff;border-radius:8px;border:1px solid #e0e0e0;'>"
-                f"{legend_html}"
-                f"<div style='border-top:1px solid #eee;margin:3px 0;'></div>"
-                f"{vocab_html}</div>"
+                f"<div style='padding:4px 10px;background:#fff;border-radius:8px;border:1px solid #e0e0e0;'>{vocab_html}</div>"
                 f"</body></html>",
-                height=62, scrolling=False
+                height=38, scrolling=False
             )
 
     fig, summary = create_dashboard(selected_date_str, excluded_students)
