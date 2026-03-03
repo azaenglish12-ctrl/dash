@@ -99,11 +99,11 @@ CUT_GRAMMAR = 80
 VOCAB_LEVEL_MAP = {
     '중학기초':      ('🌾 평민', '#78909C'),
     '중학필수':      ('⚔️ 기사', '#8D6E63'),
-    '고등기본':      ('🏰 남작', '#26A69A'),
-    '수능필수':      ('🗡️ 자작', '#5C6BC0'),
+    '고등기본':      ('💰 상인', '#26A69A'),
+    '수능필수':      ('🏰 남작', '#5C6BC0'),
     '수능완성':      ('🦁 백작', '#7E57C2'),
-    '수능심화':      ('👑 공작', '#E53935'),
-    '능률보카고난도': ('🏆 왕',   '#F9A825'),
+    '수능심화':      ('👑 영주', '#E53935'),
+    '능률보카고난도': ('🏆 황제', '#F9A825'),
 }
 
 # ============================================
@@ -248,7 +248,7 @@ def render_vocab_level_bar(student_levels):
         level, color = VOCAB_LEVEL_MAP.get(book_key, ('?', '#999'))
         groups[(level, color)].append(name)
 
-    order = ['🌾 평민', '⚔️ 기사', '🏰 남작', '🗡️ 자작', '🦁 백작', '👑 공작', '🏆 왕']
+    order = ['🌾 평민', '⚔️ 기사', '💰 상인', '🏰 남작', '🦁 백작', '👑 영주', '🏆 황제']
     html_parts = []
     for lvl in order:
         for (level, color), names in groups.items():
@@ -282,12 +282,12 @@ def render_vocab_legend(student_levels):
     parts = []
     for book_key, (level, color) in VOCAB_LEVEL_MAP.items():
         is_active = level in active_levels
-        c = color if is_active else '#ccc'
-        parts.append(f"<span style='color:{c};font-size:12px;font-weight:{'700' if is_active else '400'};'>{level}</span>")
+        c = color if is_active else '#999'
+        parts.append(f"<span style='color:{c};font-size:14px;font-weight:{'700' if is_active else '400'};'>{level}</span>")
 
     return (
         "<div style='display:flex;align-items:center;gap:2px;justify-content:center;'>"
-        + " <span style='color:#ddd;font-size:10px;'>→</span> ".join(parts)
+        + " <span style='color:#bbb;font-size:12px;'>→</span> ".join(parts)
         + "</div>"
     )
 
