@@ -271,6 +271,26 @@ def render_vocab_level_bar(student_levels):
         "</div>"
     )
 
+def render_vocab_legend(student_levels):
+    """전체 7단계 계급 범례 (학생 있는 계급=컬러, 없는 계급=회색)"""
+    active_levels = set()
+    for book_key in student_levels.values():
+        info = VOCAB_LEVEL_MAP.get(book_key)
+        if info:
+            active_levels.add(info[0])
+
+    parts = []
+    for book_key, (level, color) in VOCAB_LEVEL_MAP.items():
+        is_active = level in active_levels
+        c = color if is_active else '#ccc'
+        parts.append(f"<span style='color:{c};font-size:12px;font-weight:{'700' if is_active else '400'};'>{level}</span>")
+
+    return (
+        "<div style='display:flex;align-items:center;gap:2px;justify-content:center;'>"
+        + " <span style='color:#ddd;font-size:10px;'>→</span> ".join(parts)
+        + "</div>"
+    )
+
 
 # ============================================
 # 공통 유틸리티 함수들
@@ -1135,12 +1155,16 @@ def page_scoreboard():
         schedule_df = load_schedule()
         student_levels = get_student_vocab_levels(schedule_df, today_students)
         if student_levels:
+            legend_html = render_vocab_legend(student_levels)
             vocab_html = render_vocab_level_bar(student_levels)
             components.html(
                 f"<html><body style='margin:0;padding:0;font-family:sans-serif;background:#f5f5f5;'>"
-                f"<div style='padding:4px 10px;background:#fff;border-radius:8px;border:1px solid #e0e0e0;'>{vocab_html}</div>"
+                f"<div style='padding:4px 10px;background:#fff;border-radius:8px;border:1px solid #e0e0e0;'>"
+                f"{legend_html}"
+                f"<div style='border-top:1px solid #eee;margin:3px 0;'></div>"
+                f"{vocab_html}</div>"
                 f"</body></html>",
-                height=38, scrolling=False
+                height=62, scrolling=False
             )
 
     fig, summary = create_dashboard(selected_date_str, excluded_students)
