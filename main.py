@@ -369,11 +369,11 @@ def mask_name(name):
         return name[0] + '□' * (len(name) - 2) + name[-1]
 
 def classify_student(row, excluded_students=[], comp_lookup=None):
-    """학생 상태 분류: hero, villain, normal, comprehensive, midterm, absent"""
+    """학생 상태 분류: hero, villain, normal, comprehensive, pending, absent"""
     if row['출석'] == '결석':
         return 'absent'
     elif pd.isna(row['어휘점수']) and pd.isna(row['스펠점수']) and pd.isna(row['독해점수']):
-        return 'midterm'
+        return 'pending'
     elif _is_comprehensive(row, comp_lookup):
         return 'comprehensive'
     elif row['이름'] in excluded_students:
@@ -613,25 +613,19 @@ def add_comprehensive_bars(fig, row, x_base):
         bgcolor=COLOR_COMP, bordercolor=COLOR_COMP, borderwidth=2
     )
 
-def add_midterm_section(fig, midterm_df, start_x):
-    if len(midterm_df) == 0:
+def add_pending_section(fig, pending_df, start_x):
+    if len(pending_df) == 0:
         return
     fig.add_vrect(
-        x0=start_x - 0.5, x1=start_x + len(midterm_df) * STUDENT_WIDTH,
-        fillcolor="rgba(255, 235, 150, 0.1)", layer="below", line_width=0
+        x0=start_x - 0.5, x1=start_x + len(pending_df) * STUDENT_WIDTH,
+        fillcolor="rgba(200, 200, 200, 0.08)", layer="below", line_width=0
     )
-    for idx, (_, row) in enumerate(midterm_df.iterrows()):
-        x_pos = start_x + idx * STUDENT_WIDTH
-        masked_name = mask_name(row['이름'])
-        for i in range(4):
-            fig.add_trace(go.Bar(
-                x=[x_pos + i * 0.8], y=[40], width=0.7,
-                marker=dict(color='rgba(255, 200, 100, 0.3)',
-                           pattern=dict(shape='/', size=8, solidity=0.2)),
-                text='내신', textposition='inside', textfont=dict(size=9),
-                showlegend=False,
-                hovertemplate=f"{masked_name} - 내신기간<extra></extra>"
-            ))
+    for idx, (_, row) in enumerate(pending_df.iterrows()):
+        x_pos = start_x + idx * STUDENT_WIDTH + 1.2
+        fig.add_annotation(
+            x=x_pos, y=50, text="대기중", showarrow=False,
+            font=dict(size=11, color="#aaa"), textangle=-90
+        )
 
 def create_dashboard(selected_date, excluded_students=[]):
     df = load_data()
@@ -657,9 +651,9 @@ def create_dashboard(selected_date, excluded_students=[]):
     normal_df = today_df[today_df['status'] == 'normal'].copy()
     normal_df['class_order'] = normal_df['반'].map(class_order)
     normal_df = normal_df.sort_values(['class_order', '이름'])
-    midterm_df = today_df[today_df['status'] == 'midterm'].copy()
-    midterm_df['class_order'] = midterm_df['반'].map(class_order)
-    midterm_df = midterm_df.sort_values(['class_order', '이름'])
+    pending_df = today_df[today_df['status'] == 'pending'].copy()
+    pending_df['class_order'] = pending_df['반'].map(class_order)
+    pending_df = pending_df.sort_values(['class_order', '이름'])
     absent_df = today_df[today_df['status'] == 'absent'].copy()
     absent_df['class_order'] = absent_df['반'].map(class_order)
     absent_df = absent_df.sort_values(['class_order', '이름'])
@@ -693,13 +687,19 @@ def create_dashboard(selected_date, excluded_students=[]):
             line=dict(color=COLOR_VILLAIN_BORDER, width=3), fillcolor=COLOR_VILLAIN_BG, layer="below")
         add_villain_effect(fig, row, x_base)
 
-    midterm_start = villain_start + len(villain_df) * STUDENT_WIDTH + 1
-    add_midterm_section(fig, midterm_df, midterm_start)
+    pending_start = villain_start + len(villain_df) * STUDENT_WIDTH + 1
+    add_pending_section(fig, pending_df, pending_start)
 
-    absent_start = midterm_start + len(midterm_df) * STUDENT_WIDTH + 1
+    absent_start = pending_start + len(pending_df) * STUDENT_WIDTH + 1
     if len(absent_df) > 0:
         fig.add_vrect(x0=absent_start - 0.5, x1=absent_start + len(absent_df) * STUDENT_WIDTH,
             fillcolor="rgba(128, 128, 128, 0.1)", layer="below", line_width=0)
+        for idx, (_, row) in enumerate(absent_df.iterrows()):
+            x_pos = absent_start + idx * STUDENT_WIDTH + 1.2
+            fig.add_annotation(
+                x=x_pos, y=50, text="결석", showarrow=False,
+                font=dict(size=11, color="#ccc"), textangle=-90
+            )
 
     fig.add_hline(y=94, line_dash="dash", line_color="rgba(255,0,0,0.3)",
                   annotation_text="어휘 94", annotation_position="right")
@@ -730,11 +730,11 @@ def create_dashboard(selected_date, excluded_students=[]):
         if row['출석'] == '지각': name += " ⏰"
         all_names.append(name)
         tick_positions.append(villain_start + idx * STUDENT_WIDTH + 1.2)
-    for idx, (_, row) in enumerate(midterm_df.iterrows()):
+    for idx, (_, row) in enumerate(pending_df.iterrows()):
         name = mask_name(row['이름'])
         if row['출석'] == '지각': name += " ⏰"
         all_names.append(name)
-        tick_positions.append(midterm_start + idx * STUDENT_WIDTH + 1.2)
+        tick_positions.append(pending_start + idx * STUDENT_WIDTH + 1.2)
     for idx, (_, row) in enumerate(absent_df.iterrows()):
         all_names.append(mask_name(row['이름']))
         tick_positions.append(absent_start + idx * STUDENT_WIDTH + 1.2)
@@ -753,7 +753,7 @@ def create_dashboard(selected_date, excluded_students=[]):
         fig.add_vline(x=normal_start - 0.5, line_dash="dot", line_color=COLOR_PASS, opacity=0.5)
     if len(villain_df) > 0:
         fig.add_vline(x=villain_start - 0.5, line_dash="dot", line_color=COLOR_VILLAIN_BORDER, opacity=0.5)
-    fig.add_vline(x=midterm_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
+    fig.add_vline(x=pending_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
     if len(absent_df) > 0:
         fig.add_vline(x=absent_start - 0.5, line_dash="dot", line_color="gray", opacity=0.3)
 
@@ -764,7 +764,7 @@ def create_dashboard(selected_date, excluded_students=[]):
     comp_text = f" | <span style='color: {COLOR_COMP}; font-weight:900;'>TOTAL: {len(comp_df)}명</span>" if len(comp_df) > 0 else ""
     summary_text = f"""
     <div style='text-align: center; padding: 10px; background: white; border-radius: 5px;'>
-    <b>영웅: {len(hero_df)}명 | 빌런: {len(villain_df)}명 | 정상응시: {len(normal_df)}명{comp_text} | 내신: {len(midterm_df)}명 | 결석: {len(absent_df)}명 | 지각: {late_count}명 ⏰{excluded_text}</b><br>
+    <b>영웅: {len(hero_df)}명 | 빌런: {len(villain_df)}명 | 정상응시: {len(normal_df)}명{comp_text} | 대기중: {len(pending_df)}명 | 결석: {len(absent_df)}명 | 지각: {late_count}명 ⏰{excluded_text}</b><br>
     <span style='color: {COLOR_PASS}'>통과: {pass_count}명</span> |
     <span style='color: {COLOR_FAIL}'>재시험: {len(normal_df) - pass_count}명</span> |
     <span style='color: gray'>문법 80</span>
@@ -792,7 +792,7 @@ def create_student_dashboard(student_df, student_name):
     villain_count = 0
     normal_count = 0
     comp_count = 0
-    midterm_count = 0
+    pending_count = 0
     absent_count = 0
     late_count = 0
 
@@ -828,19 +828,21 @@ def create_student_dashboard(student_df, student_name):
                 line=dict(color=COLOR_VILLAIN_BORDER, width=3), fillcolor=COLOR_VILLAIN_BG, layer="below")
             add_villain_effect(fig, row, x_base)
             villain_count += 1
-        elif status == 'midterm':
-            for i in range(4):
-                fig.add_trace(go.Bar(
-                    x=[x_base + i * 0.8], y=[40], width=0.7,
-                    marker=dict(color='rgba(255, 200, 100, 0.3)',
-                               pattern=dict(shape='/', size=8, solidity=0.2)),
-                    text='내신', textposition='inside', textfont=dict(size=9),
-                    showlegend=False, hovertemplate=f"{label} - 내신기간<extra></extra>"
-                ))
-            midterm_count += 1
+        elif status == 'pending':
+            fig.add_vrect(x0=x_base - 0.4, x1=x_base + 2.8,
+                fillcolor="rgba(200, 200, 200, 0.08)", layer="below", line_width=0)
+            fig.add_annotation(
+                x=x_base + 1.2, y=50, text="대기중", showarrow=False,
+                font=dict(size=11, color="#aaa"), textangle=-90
+            )
+            pending_count += 1
         elif status == 'absent':
             fig.add_vrect(x0=x_base - 0.4, x1=x_base + 2.8,
                 fillcolor="rgba(128, 128, 128, 0.08)", layer="below", line_width=0)
+            fig.add_annotation(
+                x=x_base + 1.2, y=50, text="결석", showarrow=False,
+                font=dict(size=11, color="#ccc"), textangle=-90
+            )
             absent_count += 1
         else:
             fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
@@ -871,7 +873,7 @@ def create_student_dashboard(student_df, student_name):
     comp_text = f" | <span style='color: {COLOR_COMP}; font-weight:900;'>TOTAL: {comp_count}일</span>" if comp_count > 0 else ""
     summary_text = f"""
     <div style='text-align: center; padding: 10px; background: white; border-radius: 5px;'>
-    <b>영웅: {hero_count}일 | 빌런: {villain_count}일 | 정상응시: {normal_count}일{comp_text} | 내신: {midterm_count}일 | 결석: {absent_count}일 | 지각: {late_count}일 ⏰</b>
+    <b>영웅: {hero_count}일 | 빌런: {villain_count}일 | 정상응시: {normal_count}일{comp_text} | 대기중: {pending_count}일 | 결석: {absent_count}일 | 지각: {late_count}일 ⏰</b>
     </div>
     """
 
