@@ -103,7 +103,7 @@ VOCAB_LEVEL_MAP = {
     '수능필수':      ('🏰 남작', '#5C6BC0'),
     '수능완성':      ('🦁 백작', '#7E57C2'),
     '수능심화':      ('👑 영주', '#E53935'),
-    '능률보카고난도': ('🏆 황제', '#F9A825'),
+    '능률보카고난도': ('🏆 왕',   '#F9A825'),
 }
 
 # ============================================
@@ -248,7 +248,7 @@ def render_vocab_level_bar(student_levels):
         level, color = VOCAB_LEVEL_MAP.get(book_key, ('?', '#999'))
         groups[(level, color)].append(name)
 
-    order = ['🌾 평민', '⚔️ 기사', '💰 상인', '🏰 남작', '🦁 백작', '👑 영주', '🏆 황제']
+    order = ['🌾 평민', '⚔️ 기사', '💰 상인', '🏰 남작', '🦁 백작', '👑 영주', '🏆 왕']
     html_parts = []
     for lvl in order:
         for (level, color), names in groups.items():
