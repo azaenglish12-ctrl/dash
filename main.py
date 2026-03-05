@@ -235,10 +235,13 @@ def get_student_vocab_levels(schedule_df, student_names):
         options = str(latest.get('Options', '')).strip()
         if book == '고등기본' and '파생어' in options:
             book = '고등기본(파생어)'
-        for key in VOCAB_LEVEL_MAP:
-            if key in book:
-                result[name] = key
-                break
+        if book in VOCAB_LEVEL_MAP:
+            result[name] = book
+        else:
+            for key in VOCAB_LEVEL_MAP:
+                if key in book:
+                    result[name] = key
+                    break
     return result
 
 
