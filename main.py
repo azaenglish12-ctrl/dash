@@ -97,13 +97,14 @@ COLOR_COMP_BG = 'rgba(108,122,137,0.08)'
 CUT_GRAMMAR = 80
 
 VOCAB_LEVEL_MAP = {
-    '중학기초':      ('🌾 평민', '#78909C'),
-    '중학필수':      ('⚔️ 기사', '#8D6E63'),
-    '고등기본':      ('💰 상인', '#26A69A'),
-    '수능필수':      ('🏰 남작', '#5C6BC0'),
-    '수능완성':      ('🦁 백작', '#7E57C2'),
-    '수능심화':      ('👑 영주', '#E53935'),
-    '능률보카고난도': ('🏆 왕',   '#F9A825'),
+    '중학기초':        ('🌾 평민', '#78909C'),
+    '중학필수':        ('⚔️ 기사', '#8D6E63'),
+    '고등기본':        ('💰 상인', '#26A69A'),
+    '고등기본(파생어)': ('🏰 남작', '#5C6BC0'),
+    '수능필수':        ('🦁 백작', '#7E57C2'),
+    '수능완성':        ('👑 영주', '#E53935'),
+    '수능심화':        ('🏆 왕',   '#F9A825'),
+    '능률보카고난도':   ('💎 황제', '#FF6F00'),
 }
 
 # ============================================
@@ -231,6 +232,9 @@ def get_student_vocab_levels(schedule_df, student_names):
             continue
         latest = vocab_rows.sort_values('_td', ascending=False).iloc[0]
         book = str(latest['BookName']).strip()
+        options = str(latest.get('Options', '')).strip()
+        if book == '고등기본' and '파생어' in options:
+            book = '고등기본(파생어)'
         for key in VOCAB_LEVEL_MAP:
             if key in book:
                 result[name] = key
@@ -248,7 +252,7 @@ def render_vocab_level_bar(student_levels):
         level, color = VOCAB_LEVEL_MAP.get(book_key, ('?', '#999'))
         groups[(level, color)].append(name)
 
-    order = ['🌾 평민', '⚔️ 기사', '💰 상인', '🏰 남작', '🦁 백작', '👑 영주', '🏆 왕']
+    order = ['🌾 평민', '⚔️ 기사', '💰 상인', '🏰 남작', '🦁 백작', '👑 영주', '🏆 왕', '💎 황제']
     html_parts = []
     for lvl in order:
         for (level, color), names in groups.items():
@@ -272,7 +276,7 @@ def render_vocab_level_bar(student_levels):
     )
 
 def render_vocab_legend(student_levels):
-    """전체 7단계 계급 범례 (학생 있는 계급=컬러, 없는 계급=회색)"""
+    """전체 8단계 계급 범례 (학생 있는 계급=컬러, 없는 계급=회색)"""
     active_levels = set()
     for book_key in student_levels.values():
         info = VOCAB_LEVEL_MAP.get(book_key)
