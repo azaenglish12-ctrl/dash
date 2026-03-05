@@ -21,12 +21,13 @@ st.markdown("""
     .stApp {
         background-color: #f5f5f5;
     }
-    .main {
+    .main, .stMain {
         padding: 0;
         max-width: 100%;
     }
     /* TV모드: 상단 여백 극단 압축 */
-    .block-container {
+    .block-container,
+    [data-testid="stMainBlockContainer"] {
         padding-top: 0rem !important;
         padding-bottom: 0 !important;
     }
