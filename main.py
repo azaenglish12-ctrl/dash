@@ -97,6 +97,26 @@ COLOR_COMP = '#6C7A89'           # Slate Blue (총괄)
 COLOR_COMP_BG = 'rgba(108,122,137,0.08)'
 CUT_GRAMMAR = 80
 
+# ── 과제 벽돌 색상 ──
+HW_COLS = [("문맥", "문맥과제"), ("독해", "독해과제"), ("문법", "문법과제")]
+HW_DONE_C  = "#4CAF7D"   # 초록 — 완료
+HW_FAIL_C  = "#D9534F"   # 빨강 — 미완
+HW_NOSUB_C = "#FF9800"   # 주황 — 미제출
+HW_EMPTY_C = "#E0E0E0"   # 회색 — 데이터 없음
+
+
+def _hw_color(val):
+    """과제 셀 값 → 색상"""
+    if pd.isna(val) or str(val).strip() == "":
+        return HW_EMPTY_C
+    v = str(val).strip()
+    if v == "미제출":
+        return HW_NOSUB_C
+    if v.lower() in ("미완", "x"):
+        return HW_FAIL_C
+    return HW_DONE_C
+
+
 VOCAB_LEVEL_MAP = {
     '중학기초':        ('🌾 평민', '#78909C'),
     '중학필수':        ('⚔️ 기사', '#8D6E63'),
@@ -858,6 +878,30 @@ def create_student_dashboard(student_df, student_name):
             add_normal_bars(fig, row, x_base)
             normal_count += 1
 
+    # ── 과제 벽돌 ──
+    BRICK_H = 3
+    BRICK_Y_ROWS = [-5, -10, -15]  # 문맥, 독해, 문법
+
+    for idx2, (_, row) in enumerate(student_df.iterrows()):
+        x_base = idx2 * STUDENT_WIDTH
+        for ri, (label, col) in enumerate(HW_COLS):
+            val = row.get(col)
+            color = _hw_color(val)
+            fig.add_shape(
+                type="rect",
+                x0=x_base - 0.2, x1=x_base + 2.6,
+                y0=BRICK_Y_ROWS[ri], y1=BRICK_Y_ROWS[ri] + BRICK_H,
+                fillcolor=color, line=dict(color="white", width=1),
+            )
+
+    # 좌측 라벨
+    for ri, (label, _) in enumerate(HW_COLS):
+        fig.add_annotation(
+            text=label, x=-1.5, y=BRICK_Y_ROWS[ri] + BRICK_H / 2,
+            showarrow=False, font=dict(size=10, color="#888"),
+            xanchor="right", yanchor="middle",
+        )
+
     # 기준선
     fig.add_hline(y=94, line_dash="dash", line_color="rgba(255,0,0,0.3)",
                   annotation_text="어휘 94", annotation_position="right")
@@ -871,8 +915,10 @@ def create_student_dashboard(student_df, student_name):
         margin=dict(l=60, r=60, t=10, b=150),
         xaxis=dict(ticktext=all_labels, tickvals=tick_positions,
                    tickfont=dict(size=12), tickangle=0),
-        yaxis=dict(range=[0, 115], title=dict(text="점수", font=dict(size=14)),
-                   gridcolor='rgba(128,128,128,0.2)'),
+        yaxis=dict(range=[-18, 115], title=dict(text="점수", font=dict(size=14)),
+                   tickvals=[0, 20, 40, 60, 80, 100],
+                   gridcolor='rgba(128,128,128,0.2)',
+                   zeroline=True, zerolinecolor="rgba(180,180,180,0.5)"),
         plot_bgcolor='white', paper_bgcolor='#f5f5f5',
         bargap=0.1, bargroupgap=0.05,
         showlegend=False, hovermode='x'
