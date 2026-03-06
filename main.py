@@ -842,38 +842,38 @@ def create_student_dashboard(student_df, student_name):
         tick_positions.append(x_base + 1.2)
 
         if status == 'hero':
-            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=-17, y1=105,
                 line=dict(color=COLOR_HERO_BORDER, width=3), fillcolor=COLOR_HERO_BG, layer="below")
             add_hero_effect(fig, row, x_base)
             hero_count += 1
         elif status == 'comprehensive':
-            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=-17, y1=105,
                 line=dict(color=COLOR_COMP, width=3), fillcolor=COLOR_COMP_BG, layer="below")
             add_comprehensive_bars(fig, row, x_base)
             comp_count += 1
         elif status == 'villain':
-            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=-17, y1=105,
                 line=dict(color=COLOR_VILLAIN_BORDER, width=3), fillcolor=COLOR_VILLAIN_BG, layer="below")
             add_villain_effect(fig, row, x_base)
             villain_count += 1
         elif status == 'pending':
-            fig.add_vrect(x0=x_base - 0.4, x1=x_base + 2.8,
-                fillcolor="rgba(200, 200, 200, 0.08)", layer="below", line_width=0)
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=-17, y1=105,
+                line=dict(width=0), fillcolor="rgba(200, 200, 200, 0.08)", layer="below")
             fig.add_annotation(
                 x=x_base + 1.2, y=50, text="대기중", showarrow=False,
                 font=dict(size=11, color="#aaa"), textangle=-90
             )
             pending_count += 1
         elif status == 'absent':
-            fig.add_vrect(x0=x_base - 0.4, x1=x_base + 2.8,
-                fillcolor="rgba(128, 128, 128, 0.08)", layer="below", line_width=0)
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=-17, y1=105,
+                line=dict(width=0), fillcolor="rgba(128, 128, 128, 0.08)", layer="below")
             fig.add_annotation(
                 x=x_base + 1.2, y=50, text="결석", showarrow=False,
                 font=dict(size=11, color="#ccc"), textangle=-90
             )
             absent_count += 1
         else:
-            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=0, y1=105,
+            fig.add_shape(type="rect", x0=x_base - 0.4, x1=x_base + 2.8, y0=-17, y1=105,
                 line=dict(color="rgba(100, 100, 100, 0.3)", width=2), fillcolor="rgba(0,0,0,0)", layer="below")
             add_normal_bars(fig, row, x_base)
             normal_count += 1
