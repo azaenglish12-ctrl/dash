@@ -1,6 +1,6 @@
-streamlit==1.50.0
-plotly==6.3.1
-pandas==2.3.3
-numpy==2.3.3
-gspread==6.2.1
-google-auth==2.41.1
+streamlit>=1.40,<2.0
+plotly>=5.18,<7.0
+pandas>=2.0,<3.0
+numpy>=1.24,<3.0
+gspread>=6.0,<7.0
+google-auth>=2.20,<3.0
