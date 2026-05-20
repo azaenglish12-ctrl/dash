@@ -131,7 +131,7 @@ VOCAB_LEVEL_MAP = {
 # ============================================
 # 데이터 로드 함수
 # ============================================
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def load_data():
     """구글시트 또는 테스트 데이터 로드"""
     if GOOGLE_SHEETS_AVAILABLE and not GOOGLE_SHEET_URL.endswith("YOUR_SHEET_ID/edit"):
@@ -995,6 +995,13 @@ def page_student_report():
 
         student_classes = df.drop_duplicates('이름').set_index('이름')['반'].to_dict()
 
+        _rf_col, _ = st.columns([1, 6])
+        with _rf_col:
+            if st.button("🔄 새로고침", key="report_refresh",
+                         help="시트 최신 데이터 다시 가져오기 (캐시 비우기)"):
+                load_data.clear()
+                st.rerun()
+
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             selected_student = st.selectbox("학생 선택", all_students, index=0)
@@ -1122,6 +1129,11 @@ def page_student_report():
 # ============================================
 def page_scoreboard():
     """전광판 탭 - 기존 코드 그대로"""
+    from streamlit_autorefresh import st_autorefresh
+    # 30초마다 자동 rerun + 캐시 클리어 → TV에서 점수 입력 자동 반영
+    _refresh_count = st_autorefresh(interval=30_000, key="scoreboard_autorefresh")
+    if _refresh_count > 0:
+        load_data.clear()
     df = load_data()
 
     if '날짜' in df.columns:
