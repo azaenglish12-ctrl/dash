@@ -98,6 +98,35 @@ def load_data_from_sheets(sheet_url, worksheet_name="시트1"):
         st.info("시트 URL과 시트명을 확인하세요.")
         return None
 
+@st.cache_data(ttl=600)
+def load_archive_from_sheets(sheet_url, worksheet_name="수업일지_아카이브"):
+    """수업일지 아카이브 탭 로드 (이전 달 데이터). 탭 없으면 빈 DataFrame."""
+    try:
+        client = init_google_sheets()
+        if not client:
+            return pd.DataFrame()
+        sheet = client.open_by_url(sheet_url)
+        try:
+            worksheet = sheet.worksheet(worksheet_name)
+        except Exception:
+            return pd.DataFrame()
+        data = worksheet.get_all_records()
+        df = pd.DataFrame(data)
+        if df.empty:
+            return df
+        df = df.replace('', None)
+        for col in ['어휘점수', '스펠점수', '독해점수', '문법점수']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        if '날짜' in df.columns:
+            df = df[df['날짜'].notna()]
+            df = df[df['날짜'] != '']
+            df['날짜'] = df['날짜'].astype(str).str.strip()
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
 @st.cache_data(ttl=300)
 def load_schedule_data(sheet_url):
     """개별진도표 탭 로드 → DataFrame 반환 (총괄시험 감지용)"""

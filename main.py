@@ -120,6 +120,7 @@ def _hw_color(val):
 VOCAB_LEVEL_MAP = {
     '중학기초':        ('🌾 평민', '#78909C'),
     '중학필수':        ('⚔️ 기사', '#8D6E63'),
+    '중학고난도':      ('🛡️ 정예기사', '#5D4037'),
     '고등기본':        ('💰 상인', '#26A69A'),
     '고등기본(파생어)': ('🏰 남작', '#5C6BC0'),
     '수능필수':        ('🦁 백작', '#7E57C2'),
@@ -133,11 +134,23 @@ VOCAB_LEVEL_MAP = {
 # ============================================
 @st.cache_data(ttl=300)
 def load_data():
-    """구글시트 또는 테스트 데이터 로드"""
+    """구글시트 또는 테스트 데이터 로드 (수업일지 + 아카이브 결합)"""
     if GOOGLE_SHEETS_AVAILABLE and not GOOGLE_SHEET_URL.endswith("YOUR_SHEET_ID/edit"):
         df = load_data_from_sheets(GOOGLE_SHEET_URL, SHEET_NAME)
         if df is not None and not df.empty:
             df = df.rename(columns={'반코드': '반'})
+        else:
+            df = pd.DataFrame()
+        # 아카이브(이전 달) 결합 — 누적 영웅 횟수 산정용
+        try:
+            from google_sheets import load_archive_from_sheets
+            archive = load_archive_from_sheets(GOOGLE_SHEET_URL)
+            if archive is not None and not archive.empty:
+                archive = archive.rename(columns={'반코드': '반'}) if '반코드' in archive.columns else archive
+                df = pd.concat([archive, df], ignore_index=True) if not df.empty else archive
+        except Exception:
+            pass
+        if not df.empty:
             return df
 
     # 테스트 데이터 (문법점수 추가)
@@ -276,7 +289,7 @@ def render_vocab_level_bar(student_levels):
         level, color = VOCAB_LEVEL_MAP.get(book_key, ('?', '#999'))
         groups[(level, color)].append(name)
 
-    order = ['🌾 평민', '⚔️ 기사', '💰 상인', '🏰 남작', '🦁 백작', '👑 영주', '🏆 왕', '💎 황제']
+    order = ['🌾 평민', '⚔️ 기사', '🛡️ 정예기사', '💰 상인', '🏰 남작', '🦁 백작', '👑 영주', '🏆 왕', '💎 황제']
     html_parts = []
     for lvl in order:
         for (level, color), names in groups.items():
